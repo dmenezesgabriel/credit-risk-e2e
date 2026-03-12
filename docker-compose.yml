@@ -1,0 +1,146 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,sqs,sns,dynamodb,lambda,iam,cloudwatch,cloudformation,ec2,kinesis,secretsmanager,ssm,stepfunctions,eventbridge,apigateway,logs
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_DEFAULT_REGION=us-east-1
+      - LOCALSTACK_HOST=localstack
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "./config/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - credit-risk-net
+
+  postgres-db:
+    image: postgres:18-alpine3.22
+    container_name: postgres-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_MULTIPLE_DATABASES: mlflow,airflow # handled by init script below
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_pgdata:/var/lib/postgresql/data
+      - ./config/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    networks:
+      - credit-risk-net
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+
+  adminer:
+    image: adminer:5.4.1
+    container_name: adminer
+    ports:
+      - "8082:8080"
+    networks:
+      - credit-risk-net
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    container_name: mlflow
+    depends_on:
+      - postgres-db
+      - localstack
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_TRACKING_URI: postgresql://mlflow:mlflow@postgres-db:5432/mlflow
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      MLFLOW_S3_ENDPOINT_URL: http://localstack:4566
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://mlflow:mlflow@postgres-db:5432/mlflow
+      --artifacts-destination s3://mlflow-artifacts
+    networks:
+      - credit-risk-net
+
+  airflow-webserver:
+    # user: "0:0"
+    group_add:
+      - "${DOCKER_GID}"
+    image: apache/airflow:2.9.3
+    container_name: airflow-webserver
+    depends_on:
+      - postgres-db
+      - localstack
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      _AIRFLOW_DB_MIGRATE: "true" # runs db migrate on startup
+      _AIRFLOW_WWW_USER_CREATE: "true" # creates user if not exists
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+      _AIRFLOW_WWW_USER_FIRSTNAME: admin
+      _AIRFLOW_WWW_USER_LASTNAME: admin
+      _AIRFLOW_WWW_USER_ROLE: Admin
+      _AIRFLOW_WWW_USER_EMAIL: admin@local
+      AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
+      PYTHONWARNINGS: "ignore::SyntaxWarning"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: webserver
+    networks:
+      - credit-risk-net
+    env_file:
+      - .env
+
+  airflow-scheduler:
+    # user: "0:0"
+    group_add:
+      - "${DOCKER_GID}"
+    image: apache/airflow:2.9.3
+    container_name: airflow-scheduler
+    depends_on:
+      - airflow-webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
+      PYTHONWARNINGS: "ignore::SyntaxWarning"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: scheduler
+    networks:
+      - credit-risk-net
+    env_file:
+      - .env
+
+volumes:
+  postgres_pgdata:
+  metrics_pgdata:
+  grafana_data:
+
+networks:
+  credit-risk-net:
+    driver: bridge
