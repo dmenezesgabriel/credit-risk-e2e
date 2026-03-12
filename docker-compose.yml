@@ -162,8 +162,6 @@ services:
 
 volumes:
   postgres_pgdata:
-  metrics_pgdata:
-  grafana_data:
 
 networks:
   credit-risk-net:
