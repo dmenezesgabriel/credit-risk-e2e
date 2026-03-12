@@ -1,3 +1,8 @@
+"""
+In a real world situation, instead of using docker operator
+it would do a python script to trigger glue via aws API
+"""
+
 import os
 from datetime import datetime
 
@@ -23,7 +28,7 @@ with DAG(
         network_mode="credit-risk-e2e_credit-risk-net",
         mounts=[
             Mount(
-                source=PROJECT_ROOT,
+                source=PROJECT_ROOT,  # From host, set on .env
                 target="/workspace",
                 type="bind",
             )
