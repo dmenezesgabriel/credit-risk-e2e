@@ -6,6 +6,7 @@ from pyspark.sql import SparkSession
 spark = SparkSession.builder.appName("silver_cleaning").getOrCreate()
 
 BUCKET = "data-lake"
+FILE_NAME = "cs-training.csv"
 
 bronze_path = f"s3a://{BUCKET}/bronze/credit_risk/kaggle/"
 silver_path = f"s3a://{BUCKET}/silver/credit_risk/cleaned/"

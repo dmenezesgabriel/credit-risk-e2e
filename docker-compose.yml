@@ -78,7 +78,7 @@ services:
 
   localstack:
     <<: *resources-medium # spikes on lambda/s3 ops but mostly idle
-    image: localstack/localstack:latest
+    image: localstack/localstack:4
     container_name: localstack
     ports:
       - "4566:4566"
@@ -94,7 +94,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - "./config/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -139,7 +139,7 @@ services:
       - credit-risk-net
 
   mlflow:
-    <<: *resources-medium # tracking server is mostly I/O bound
+    <<: *resources-large # tracking server is mostly I/O bound
     build:
       context: .
       dockerfile: Dockerfile.mlflow
@@ -164,19 +164,17 @@ services:
     networks:
       - credit-risk-net
 
-  airflow-webserver:
+  airflow-init:
     <<: *resources-medium
     group_add:
       - "${DOCKER_GID}"
     image: apache/airflow:2.9.3
-    container_name: airflow-webserver
+    container_name: airflow-init
     depends_on:
       postgres-db:
-        condition: service_healthy # waits for pg_isready, not just container start
+        condition: service_healthy
       localstack:
         condition: service_healthy
-    ports:
-      - "8080:8080"
     environment:
       <<: [*aws-env, *airflow-env]
       _AIRFLOW_DB_MIGRATE: "true"
@@ -188,11 +186,38 @@ services:
       _AIRFLOW_WWW_USER_ROLE: Admin
       _AIRFLOW_WWW_USER_EMAIL: admin@local
     volumes: *airflow-volumes
+    networks:
+      - credit-risk-net
+    command: version
+
+  airflow-webserver:
+    <<: *resources-large
+    group_add:
+      - "${DOCKER_GID}"
+    image: apache/airflow:2.9.3
+    container_name: airflow-webserver
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      <<: [*aws-env, *airflow-env]
+      AIRFLOW__WEBSERVER__WORKERS: 2
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: 300
+      AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
+    volumes: *airflow-volumes
     command: webserver
     networks:
       - credit-risk-net
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 150s
 
   airflow-scheduler:
     <<: *resources-large # scheduler needs burst room when triggering DAGs
@@ -201,12 +226,8 @@ services:
     image: apache/airflow:2.9.3
     container_name: airflow-scheduler
     depends_on:
-      airflow-webserver:
-        condition: service_started
-      postgres-db:
-        condition: service_healthy # waits for pg_isready, not just container start
-      localstack:
-        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     environment:
       <<: [*aws-env, *airflow-env]
     volumes: *airflow-volumes
@@ -220,7 +241,9 @@ services:
     <<: *resources-small # completely idle unless you're actively using the UI
     image: portainer/portainer-ce:latest
     container_name: portainer
-    restart: unless-stopped
+    # 1. docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'superpassword' | cut -d ":" -f 2
+    # 2. You need to escape each $ character inside the hashed password with another $
+    command: --admin-password '$$2y$$05$$v1jZdrzA6cdaii29.kpMsu1tFC9OHDDF8rj9LeSNRPGeHUcT.WOS.' # superpassword
     ports:
       - "9000:9000"
     volumes:
@@ -233,7 +256,6 @@ services:
     <<: *resources-small # static config renderer, ~30MB baseline
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
-    restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
