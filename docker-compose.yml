@@ -73,6 +73,8 @@ services:
       --no-browser
       --allow-root
       --notebook-dir=/app
+      --ServerApp.token=''
+      --ServerApp.password=''
     networks:
       - credit-risk-net
 

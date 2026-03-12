@@ -58,16 +58,18 @@ COPY --from=builder /opt/python /opt/python
 ENV PATH="/opt/python/bin:/usr/local/bin:${PATH}"
 ENV PYTHONPATH="/opt/python/lib/python3.11/site-packages:${PYTHONPATH}"
 
-# Copy the entire repository
-COPY . .
+RUN mkdir -p /scripts
+COPY ./scripts/setup_uv_kernel.py /scripts/setup_uv_kernel.py
+COPY ./notebooks ./notebooks
+COPY ./src ./src
 
 # Setup kernels - unset PYTHONPATH to avoid conflicts
 # RUN env -u PYTHONPATH python scripts/setup_uv_kernel.py
 
 EXPOSE 8888
 
-COPY scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY ./scripts/entrypoint.sh /scripts/entrypoint.sh
+RUN chmod +x /scripts/entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/scripts/entrypoint.sh"]
 CMD ["jupyter-lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--notebook-dir=/app"]
