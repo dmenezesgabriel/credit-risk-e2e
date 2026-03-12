@@ -53,9 +53,10 @@ def glue_task(task_id: str, script: str) -> DockerOperator:
 
 with DAG(
     dag_id="credit_risk_bronze_ingestion",
-    start_date=datetime(2024, 1, 1),
-    schedule_interval=None,
-    catchup=False,
+    start_date=datetime(2026, 1, 1),
+    schedule="@daily",
+    catchup=True,
+    max_active_runs=1,
 ) as dag:
 
     ingest = glue_task("bronze_ingestion", "bronze_ingestion.py")
