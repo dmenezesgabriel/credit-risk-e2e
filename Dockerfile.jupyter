@@ -19,13 +19,11 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin
 
 WORKDIR /app
 
-COPY pyproject.toml .
 COPY scripts ./scripts
-COPY packages ./packages
 
 # Install project dependencies and dev dependencies
 RUN mkdir -p /opt/python && \
-    uv pip install --no-cache-dir --prefix=/opt/python --group dev .
+    uv pip install --no-cache-dir --prefix=/opt/python jupyterlab
 
 
 # ============================

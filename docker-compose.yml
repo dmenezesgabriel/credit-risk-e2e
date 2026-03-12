@@ -1,5 +1,57 @@
+x-aws-env: &aws-env
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://localstack:4566
+
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
+  PYTHONWARNINGS: "ignore::SyntaxWarning"
+
+x-airflow-volumes: &airflow-volumes
+  - ./airflow/dags:/opt/airflow/dags
+  - ./:/workspace
+  - /var/run/docker.sock:/var/run/docker.sock
+
+# Tight cap for always-on infra/UI tools that are mostly idle
+x-resources-small: &resources-small
+  deploy:
+    resources:
+      limits:
+        memory: 256M
+        cpus: "0.25"
+      reservations:
+        memory: 64M
+        cpus: "0.05"
+
+# Medium for supporting services with occasional bursts
+x-resources-medium: &resources-medium
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+        cpus: "0.50"
+      reservations:
+        memory: 128M
+        cpus: "0.10"
+
+# Generous for services that run actual workloads
+x-resources-large: &resources-large
+  deploy:
+    resources:
+      limits:
+        memory: 1G
+        cpus: "1.00"
+      reservations:
+        memory: 256M
+        cpus: "0.25"
+
 services:
   jupyter:
+    <<: *resources-large # needs headroom for data processing
     build:
       context: .
       dockerfile: Dockerfile.jupyter
@@ -11,6 +63,7 @@ services:
       - ./src:/app/src
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
+      <<: *aws-env
       JUPYTER_TOKEN: ""
       JUPYTER_ENABLE_LAB: "yes"
     command: >
@@ -24,6 +77,7 @@ services:
       - credit-risk-net
 
   localstack:
+    <<: *resources-medium # spikes on lambda/s3 ops but mostly idle
     image: localstack/localstack:latest
     container_name: localstack
     ports:
@@ -48,13 +102,14 @@ services:
       - credit-risk-net
 
   postgres-db:
+    <<: *resources-medium # already tuned via postgres flags, cap above that
     image: postgres:18-alpine3.22
     container_name: postgres-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
-      POSTGRES_MULTIPLE_DATABASES: mlflow,airflow # handled by init script below
+      POSTGRES_MULTIPLE_DATABASES: mlflow,airflow
     ports:
       - "5432:5432"
     volumes:
@@ -67,8 +122,15 @@ services:
       -c shared_buffers=128MB
       -c work_mem=4MB
       -c maintenance_work_mem=64MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   adminer:
+    <<: *resources-small # pure PHP UI, barely uses anything
     image: adminer:5.4.1
     container_name: adminer
     ports:
@@ -77,20 +139,21 @@ services:
       - credit-risk-net
 
   mlflow:
+    <<: *resources-medium # tracking server is mostly I/O bound
     build:
       context: .
       dockerfile: Dockerfile.mlflow
     container_name: mlflow
     depends_on:
-      - postgres-db
-      - localstack
+      postgres-db:
+        condition: service_healthy # waits for pg_isready, not just container start
+      localstack:
+        condition: service_healthy
     ports:
       - "5000:5000"
     environment:
+      <<: *aws-env
       MLFLOW_TRACKING_URI: postgresql://mlflow:mlflow@postgres-db:5432/mlflow
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      AWS_DEFAULT_REGION: us-east-1
       MLFLOW_S3_ENDPOINT_URL: http://localstack:4566
     command: >
       mlflow server
@@ -102,34 +165,29 @@ services:
       - credit-risk-net
 
   airflow-webserver:
-    # user: "0:0"
+    <<: *resources-medium
     group_add:
       - "${DOCKER_GID}"
     image: apache/airflow:2.9.3
     container_name: airflow-webserver
     depends_on:
-      - postgres-db
-      - localstack
+      postgres-db:
+        condition: service_healthy # waits for pg_isready, not just container start
+      localstack:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      _AIRFLOW_DB_MIGRATE: "true" # runs db migrate on startup
-      _AIRFLOW_WWW_USER_CREATE: "true" # creates user if not exists
+      <<: [*aws-env, *airflow-env]
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: admin
       _AIRFLOW_WWW_USER_FIRSTNAME: admin
       _AIRFLOW_WWW_USER_LASTNAME: admin
       _AIRFLOW_WWW_USER_ROLE: Admin
       _AIRFLOW_WWW_USER_EMAIL: admin@local
-      AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
-      PYTHONWARNINGS: "ignore::SyntaxWarning"
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./:/workspace
-      - /var/run/docker.sock:/var/run/docker.sock
+    volumes: *airflow-volumes
     command: webserver
     networks:
       - credit-risk-net
@@ -137,31 +195,56 @@ services:
       - .env
 
   airflow-scheduler:
-    # user: "0:0"
+    <<: *resources-large # scheduler needs burst room when triggering DAGs
     group_add:
       - "${DOCKER_GID}"
     image: apache/airflow:2.9.3
     container_name: airflow-scheduler
     depends_on:
-      - airflow-webserver
+      airflow-webserver:
+        condition: service_started
+      postgres-db:
+        condition: service_healthy # waits for pg_isready, not just container start
+      localstack:
+        condition: service_healthy
     environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
-      PYTHONWARNINGS: "ignore::SyntaxWarning"
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
-      - ./:/workspace
-      - /var/run/docker.sock:/var/run/docker.sock
+      <<: [*aws-env, *airflow-env]
+    volumes: *airflow-volumes
     command: scheduler
     networks:
       - credit-risk-net
     env_file:
       - .env
 
+  portainer:
+    <<: *resources-small # completely idle unless you're actively using the UI
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - credit-risk-net
+
+  homepage:
+    <<: *resources-small # static config renderer, ~30MB baseline
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config/homepage:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - credit-risk-net
+
 volumes:
   postgres_pgdata:
+  portainer_data:
 
 networks:
   credit-risk-net:

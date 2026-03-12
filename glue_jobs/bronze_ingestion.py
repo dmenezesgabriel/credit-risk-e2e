@@ -17,14 +17,13 @@ FILE_NAME = "cs-training.csv"
 
 BUCKET = "data-lake"
 
+AWS_ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL")
+
 
 def upload_to_s3(file_path, key):
     s3 = boto3.client(
         "s3",
-        endpoint_url="http://localstack:4566",
-        aws_access_key_id="test",
-        aws_secret_access_key="test",
-        region_name="us-east-1",
+        endpoint_url=AWS_ENDPOINT_URL if AWS_ENDPOINT_URL else None,
     )
 
     s3.upload_file(file_path, BUCKET, key)

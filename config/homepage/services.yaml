@@ -1,0 +1,30 @@
+- MLOps Stack:
+    - Jupyter Lab:
+        href: http://localhost:8888
+        description: Notebooks
+        icon: jupyter.png
+
+    - MLflow:
+        href: http://localhost:5000
+        description: Experiment tracking
+        icon: mlflow.png
+
+    - Airflow:
+        href: http://localhost:8080
+        description: Pipeline orchestration
+        icon: airflow.png
+
+    - Adminer:
+        href: http://localhost:8082
+        description: Postgres UI
+        icon: adminer.png
+
+    - Portainer:
+        href: http://localhost:9000
+        description: Container manager
+        icon: portainer.png
+
+    - LocalStack:
+        href: http://localhost:4566/health
+        description: AWS mock
+        icon: aws.png
