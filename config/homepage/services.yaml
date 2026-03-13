@@ -7,12 +7,12 @@
     - MLflow:
         href: http://localhost:5000
         description: Experiment tracking
-        icon: mlflow.png
+        icon: si-mlflow
 
     - Airflow:
         href: http://localhost:8080
         description: Pipeline orchestration
-        icon: airflow.png
+        icon: apache-airflow.png
 
     - Adminer:
         href: http://localhost:8082

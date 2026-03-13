@@ -13,3 +13,7 @@ aws --endpoint-url=http://localhost:4566 s3 ls s3://data-lake/ --recursive
 ```sh
 gh repo view --web
 ```
+
+## References
+
+- https://developers.cyberagent.co.jp/blog/archives/58870/

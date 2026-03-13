@@ -8,22 +8,19 @@ RUN apt-get update && \
         build-essential \
         python3-dev \
         pkg-config \
-        libcairo2-dev \
-        libpango1.0-dev \
-        ffmpeg \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
-# RUN pip install --no-cache-dir uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin
-
 WORKDIR /app
 
-COPY scripts ./scripts
-
-# Install project dependencies and dev dependencies
-RUN mkdir -p /opt/python && \
-    uv pip install --no-cache-dir --prefix=/opt/python jupyterlab
+# Create a stable venv for Jupyter itself
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir \
+        "jupyterlab==4.3.4" \
+        "terminado>=0.17" \
+        "jupyter-lsp==2.2.5" \
+        "jupyterlab-lsp==5.1.0" \
+        "python-lsp-server[flake8,mypy,black,isort]==1.12.0"
 
 
 # ============================
@@ -33,43 +30,35 @@ FROM python:3.11-slim AS runtime
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        libcairo2 \
-        libpango-1.0-0 \
-        libpangocairo-1.0-0 \
-        ffmpeg \
         git \
         tmux \
         curl \
         graphviz \
     && rm -rf /var/lib/apt/lists/*
 
-# RUN pip install --no-cache-dir uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin
+# uv for ephemeral kernels only
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 # Pre-install Python versions for uv kernels
 RUN uv python install 3.11
 
+# Copy stable Jupyter venv from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Jupyter is run from the venv, NOT uv
+ENV PATH="/opt/venv/bin:${PATH}"
+# Do NOT set PYTHONPATH — kernels manage their own envs via uv
+
 WORKDIR /app
-
-# Copy installed Python packages from builder
-COPY --from=builder /opt/python /opt/python
-
-# Set PATH and PYTHONPATH to use installed packages
-ENV PATH="/opt/python/bin:/usr/local/bin:${PATH}"
-ENV PYTHONPATH="/opt/python/lib/python3.11/site-packages:${PYTHONPATH}"
 
 RUN mkdir -p /scripts
 COPY ./scripts/setup_uv_kernel.py /scripts/setup_uv_kernel.py
+COPY ./scripts/entrypoint.sh /scripts/entrypoint.sh
 COPY ./notebooks ./notebooks
-COPY ./src ./src
 
-# Setup kernels - unset PYTHONPATH to avoid conflicts
-# RUN env -u PYTHONPATH python scripts/setup_uv_kernel.py
+RUN chmod +x /scripts/entrypoint.sh
 
 EXPOSE 8888
-
-COPY ./scripts/entrypoint.sh /scripts/entrypoint.sh
-RUN chmod +x /scripts/entrypoint.sh
 
 ENTRYPOINT ["/scripts/entrypoint.sh"]
 CMD ["jupyter-lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--notebook-dir=/app"]

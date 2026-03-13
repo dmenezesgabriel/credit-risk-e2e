@@ -1,0 +1,11 @@
+# Exclude system and trash folders
+**/.Trash-*
+**/.DS_Store
+.git
+.ipynb_checkpoints
+
+# Exclude local python artifacts
+__pycache__/
+*.py[cod]
+.venv/
+.uv/

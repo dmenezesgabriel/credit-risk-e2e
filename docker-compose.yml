@@ -59,8 +59,7 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      - ./notebooks:/app/notebooks
-      - ./src:/app/src
+      - ./notebooks:/app
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       <<: *aws-env
