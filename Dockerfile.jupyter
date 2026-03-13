@@ -71,6 +71,13 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 # Do NOT set PYTHONPATH — kernels manage their own envs via uv
 
+# Jupyter Lab config
+ENV JUPYTER_CONFIG_DIR=/home/.jupyter
+
+COPY ./config/jupyter/jupyter_notebook_config.json /usr/local/etc/jupyter/jupyter_notebook_config.json
+COPY ./config/jupyter/jupyter_notebook_config.py /home/.jupyter/jupyter_server_config.py
+COPY ./config/jupyter/overrides.json /opt/venv/share/jupyter/lab/settings/overrides.json
+
 WORKDIR /app
 
 RUN mkdir -p /scripts
