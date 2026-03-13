@@ -13,7 +13,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Create a stable venv for Jupyter itself
+# Create a stable venv for Jupyter
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir \
         "jupyterlab==4.3.4" \
@@ -32,9 +32,31 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         git \
         tmux \
+        zsh \
+        vim \
         curl \
         graphviz \
+    # ======================================================================= #
+    # Docker CLI
+    # ======================================================================= #
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+       https://download.docker.com/linux/debian bookworm stable" \
+       > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        docker-ce-cli \
+        docker-compose-plugin \
+    # ======================================================================= #
     && rm -rf /var/lib/apt/lists/*
+
+# Create Docker Compose binary for sagemaker[local] usage
+RUN echo '#!/bin/sh\nexec docker compose "$@"' > /usr/local/bin/docker-compose \
+    && chmod +x /usr/local/bin/docker-compose
+
+# Install Oh my Zsh
+RUN sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
 # uv for ephemeral kernels only
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
