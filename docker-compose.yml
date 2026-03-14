@@ -187,7 +187,7 @@ services:
       --port 5000
       --backend-store-uri postgresql://mlflow:mlflow@postgres-db:5432/mlflow
       --artifacts-destination s3://mlflow-artifacts
-      --allowed-hosts "mlflow,localhost,127.0.0.1,192.168.*"
+      --allowed-hosts "*"
     networks:
       - credit-risk-net
     healthcheck:
