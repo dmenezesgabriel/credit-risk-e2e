@@ -166,6 +166,18 @@ Usually the deploy has to be made first in **shadow mode**: the new model runs i
 
 Set automated retraining triggers. In credit markets, macroeconomic shocks (interest rate hikes, unemployment spikes) can invalidate a model within weeks.
 
+## Considerations
+
+- The feature store has no concept of _train/val/test_. That's a model training concern, not a data concern
+- The feature store's job is to serve features correctly for any entity at any point in time
+- The training pipeline asks Feast for a historical dataset, gets back a flat dataframe, and then splits it
+- The split logic is versioned inside the training code, logged to MLflow alongside the model
+- The **gold layer on S3** is Feast's offline store. It's the materialized, engineered feature parquet files that Feast indexes and serves for historical training retrieval. You write to it from your Glue job. Feast reads from it when you call `get_historical_features()`
+- The DynamoDB table is _Feast's online store_. It holds only the latest feature value per entity. You populate it by running `feast materialize`. The inference API calls `get_online_features()` against DynamoDB, getting sub-10ms latency
+- The _Glue job_ writes to gold/S3. It does not split. It does not impute. It does not scale. It engineers features for every entity, for every date partition
+- The training pipeline then asks _Feast "give me all features for these entity IDs at these timestamps"_ and gets back a single flat dataframe. That's where the **split** and **preprocessing** pipeline runs — inside _SageMaker_, on that retrieved dataframe
+- The feature store serves both **training** and **inference** using identical feature computation. The preprocessor _(imputer, scaler, capper)_ is a **model artifact**. It belongs to a specific model version, stored alongside the model in MLflow. A new model version might use different capping thresholds. That's fine, it's versioned in MLflow. But the features themselves are shared across all models and all teams
+
 ## Running Locally
 
 1. Run the containers:
