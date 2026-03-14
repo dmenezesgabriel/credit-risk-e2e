@@ -18,7 +18,7 @@ PROJECT_ROOT = os.environ["PROJECT_ROOT"]
 
 def glue_task(task_id: str, script: str) -> DockerOperator:
     return DockerOperator(  # type: ignore
-        task_id=f"{task_id}",
+        task_id=task_id,
         image="public.ecr.aws/glue/aws-glue-libs:5",
         command=f"""
         spark-submit
@@ -26,8 +26,8 @@ def glue_task(task_id: str, script: str) -> DockerOperator:
         --conf spark.hadoop.fs.s3a.access.key=test
         --conf spark.hadoop.fs.s3a.secret.key=test
         --conf spark.hadoop.fs.s3a.path.style.access=true
-        /workspace/glue_jobs/{script}
-        """,
+        /workspace/glue_jobs/{script} {{{{ ds }}}}
+        """,  # {{ ds }} is Airflow's logical execution date
         docker_url="unix://var/run/docker.sock",
         network_mode="credit-risk-e2e_credit-risk-net",
         mounts=[

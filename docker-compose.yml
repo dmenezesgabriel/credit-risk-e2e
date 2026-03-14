@@ -60,6 +60,7 @@ services:
       - "8888:8888"
     volumes:
       - ./notebooks:/app
+      - uv_cache:/root/.cache/uv
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp # for sagemaker[local] usage
     environment:
@@ -269,6 +270,7 @@ services:
 volumes:
   postgres_pgdata:
   portainer_data:
+  uv_cache:
 
 networks:
   credit-risk-net:
