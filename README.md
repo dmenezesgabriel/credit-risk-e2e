@@ -208,8 +208,14 @@ gh repo view --web
 docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}"
 ```
 
+Airflow UI Retries:
+
+- Retry: same TaskInstance, same compiled command, just runs again
+- Clear: new TaskInstance built from current DAG file on disk
+
 ## References
 
 - [Sagemaker Pipeline Local Mode](https://developers.cyberagent.co.jp/blog/archives/58870/)
 - [scikit_learn_bring_your_own_container_local_processing](https://github.com/aws-samples/amazon-sagemaker-local-mode/blob/main/scikit_learn_bring_your_own_container_local_processing/scikit_learn_bring_your_own_container_local_processing.py)
 - [scikit_learn_bring_your_own_container_and_own_model_local_serving](https://github.com/aws-samples/amazon-sagemaker-local-mode/tree/main/scikit_learn_bring_your_own_container_and_own_model_local_serving)
+- [feast.dev docs](https://rtd.feast.dev/en/latest/#feast.repo_config.RepoConfig)
