@@ -190,6 +190,12 @@ aws --endpoint-url=http://localhost:4566 s3 ls s3://data-lake/ --recursive
 gh repo view --web
 ```
 
+- Docker containers resource consumption:
+
+```sh
+docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}"
+```
+
 ## References
 
 - [Sagemaker Pipeline Local Mode](https://developers.cyberagent.co.jp/blog/archives/58870/)
