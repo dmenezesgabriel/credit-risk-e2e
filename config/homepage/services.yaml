@@ -3,28 +3,58 @@
         href: http://localhost:8888
         description: Notebooks
         icon: jupyter.png
+        widget:
+          type: docker
+          container: jupyter
+          server: my-docker
+          stats: true
 
     - MLflow:
         href: http://localhost:5000
         description: Experiment tracking
         icon: si-mlflow
+        widget:
+          type: docker
+          container: mlflow
+          server: my-docker
+          stats: true
 
     - Airflow:
         href: http://localhost:8080
         description: Pipeline orchestration
         icon: apache-airflow.png
+        widget:
+          type: docker
+          container: airflow-webserver
+          server: my-docker
+          stats: true
 
     - Adminer:
         href: http://localhost:8082
         description: Postgres UI
         icon: adminer.png
+        widget:
+          type: docker
+          container: adminer
+          server: my-docker
+          stats: true
 
     - Portainer:
         href: http://localhost:9000
         description: Container manager
         icon: portainer.png
+        widget:
+          type: docker
+          container: portainer
+          server: my-docker
+          stats: true
 
     - LocalStack:
         href: http://localhost:4566/health
         description: AWS mock
         icon: aws.png
+        widget:
+          type: docker
+          container: localstack
+          server: my-docker
+          stats: true
