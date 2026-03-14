@@ -49,9 +49,19 @@ x-resources-large: &resources-large
         memory: 256M
         cpus: "0.25"
 
+x-resources-xlarge: &resources-xlarge
+  deploy:
+    resources:
+      limits:
+        memory: 4G
+        cpus: "2.00"
+      reservations:
+        memory: 256M
+        cpus: "0.25"
+
 services:
   jupyter:
-    <<: *resources-large # needs headroom for data processing
+    <<: *resources-xlarge # needs headroom for data processing
     build:
       context: .
       dockerfile: Dockerfile.jupyter
