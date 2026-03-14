@@ -73,7 +73,7 @@ def feast_materialize_task() -> DockerOperator:
             "pip install -q 'feast[aws]==0.40.1' 's3fs' && "
             "cd /workspace/feature_store/feature_repo && "
             "feast apply && "
-            "feast materialize {{ ds }}T00:00:00 {{ ds }}T23:59:59",
+            "feast materialize-incremental $(date -u +%Y-%m-%dT%H:%M:%S)",
         ],
         docker_url="unix://var/run/docker.sock",
         network_mode=NETWORK,
