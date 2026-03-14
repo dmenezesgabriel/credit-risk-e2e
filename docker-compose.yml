@@ -74,10 +74,14 @@ services:
       --no-browser
       --allow-root
       --notebook-dir=/app
-      --ServerApp.token=''
-      --ServerApp.password=''
     networks:
       - credit-risk-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8888/api || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   localstack:
     <<: *resources-medium # spikes on lambda/s3 ops but mostly idle
@@ -140,6 +144,12 @@ services:
       - "8082:8080"
     networks:
       - credit-risk-net
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   mlflow:
     <<: *resources-large # tracking server is mostly I/O bound
@@ -164,11 +174,22 @@ services:
       --port 5000
       --backend-store-uri postgresql://mlflow:mlflow@postgres-db:5432/mlflow
       --artifacts-destination s3://mlflow-artifacts
+      --allowed-hosts "mlflow,localhost,127.0.0.1,192.168.*"
     networks:
       - credit-risk-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f -H 'Host: localhost' http://localhost:5000/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   airflow-init:
-    <<: *resources-medium
+    <<: *resources-large
     group_add:
       - "${DOCKER_GID}"
     image: apache/airflow:2.9.3
@@ -233,16 +254,27 @@ services:
         condition: service_completed_successfully
     environment:
       <<: [*aws-env, *airflow-env]
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
     volumes: *airflow-volumes
     command: scheduler
     networks:
       - credit-risk-net
     env_file:
       - .env
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'airflow jobs check --job-type SchedulerJob --hostname "$(hostname)"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   portainer:
     <<: *resources-small # completely idle unless you're actively using the UI
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:2.39.0-alpine
     container_name: portainer
     # 1. docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'superpassword' | cut -d ":" -f 2
     # 2. You need to escape each $ character inside the hashed password with another $
@@ -254,6 +286,16 @@ services:
       - portainer_data:/data
     networks:
       - credit-risk-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:9000/api/system/status || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   homepage:
     <<: *resources-small # static config renderer, ~30MB baseline
@@ -266,6 +308,16 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - credit-risk-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
 volumes:
   postgres_pgdata:

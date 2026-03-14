@@ -1,7 +1,12 @@
 {
     "language_servers": {
-        "pyls": {
+        "pyright": {
+            "priority": 1
+        },
+        "pylsp": {
             "serverSettings": {
+                "pyls.plugins.pydocstyle.enabled": true,
+                "pyls.plugins.pyflakes.enabled": false,
                 "pyls.plugins.flake8.enabled": true
             }
         }

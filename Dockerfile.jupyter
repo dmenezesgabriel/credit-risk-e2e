@@ -20,7 +20,12 @@ RUN python -m venv /opt/venv && \
         "terminado>=0.17" \
         "jupyter-lsp==2.2.5" \
         "jupyterlab-lsp==5.1.0" \
-        "python-lsp-server[flake8,mypy,black,isort]==1.12.0"
+        "python-lsp-server[flake8,mypy,black,isort]==1.12.0" \
+        "catppuccin-jupyterlab==0.2.4" \
+        "jupyterlab-code-formatter" \
+        "black" \
+        "isort"\
+        "jupyterlab-spellchecker"
 
 
 # ============================

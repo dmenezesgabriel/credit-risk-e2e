@@ -1,9 +1,18 @@
 {
+    "jupyterlab_code_formatter:settings": {
+        "formatOnSave": true,
+        "default_formatter": {
+            "python": [
+                "isort",
+                "black"
+            ]
+        }
+    },
     "@jupyterlab/filebrowser-extension:browser": {
         "showHiddenFiles": true
     },
     "@jupyterlab/apputils-extension:themes": {
-        "theme": "JupyterLab Light"
+        "theme": "Catppuccin Frappé"
     },
     "@jupyterlab/notebook-extension:tracker": {
         "codeCellConfig": {
