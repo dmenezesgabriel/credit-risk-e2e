@@ -1,3 +1,4 @@
+# type: ignore
 """
 In a real world situation, instead of using docker operator
 it would do a python script to trigger glue via aws API
@@ -6,12 +7,10 @@ it would do a python script to trigger glue via aws API
 import os
 from datetime import datetime
 
-from airflow.providers.docker.operators.docker import (
-    DockerOperator,
-)  # type: ignore
-from docker.types import Mount  # type: ignore
+from airflow.providers.docker.operators.docker import DockerOperator
+from docker.types import Mount
 
-from airflow import DAG  # type: ignore
+from airflow import DAG
 
 PROJECT_ROOT = os.environ["PROJECT_ROOT"]
 
@@ -27,7 +26,7 @@ NETWORK = "credit-risk-e2e_credit-risk-net"
 
 
 def glue_task(task_id: str, script: str) -> DockerOperator:
-    return DockerOperator(  # type: ignore
+    return DockerOperator(
         task_id=task_id,
         image="public.ecr.aws/glue/aws-glue-libs:5",
         command=f"""
@@ -63,33 +62,6 @@ def glue_task(task_id: str, script: str) -> DockerOperator:
     )
 
 
-def feast_materialize_task() -> DockerOperator:
-    return DockerOperator(  # type: ignore
-        task_id="feast_materialize",
-        image="python:3.11-slim",
-        entrypoint="bash",
-        command=[
-            "-c",
-            "pip install -q 'feast[aws]==0.40.1' 's3fs' && "
-            "cd /workspace/feature_store/feature_repo && "
-            "feast apply && "
-            "feast materialize-incremental $(date -u +%Y-%m-%dT%H:%M:%S)",
-        ],
-        docker_url="unix://var/run/docker.sock",
-        network_mode=NETWORK,
-        mounts=[Mount(source=PROJECT_ROOT, target="/workspace", type="bind")],
-        mount_tmp_dir=False,
-        environment={
-            "AWS_ACCESS_KEY_ID": AWS_ACCESS_KEY_ID,
-            "AWS_SECRET_ACCESS_KEY": AWS_SECRET_ACCESS_KEY,
-            "AWS_DEFAULT_REGION": AWS_DEFAULT_REGION,
-            "AWS_ENDPOINT_URL": AWS_ENDPOINT_URL,
-            "FEAST_S3_ENDPOINT_URL": AWS_ENDPOINT_URL,
-        },
-        auto_remove="success",
-    )
-
-
 with DAG(
     dag_id="credit_risk_data_pipeline",
     description="Bronze => Silver => Gold => Feast materialise",
@@ -111,6 +83,5 @@ with DAG(
         "gold_feature_engineering",
         "gold_feature_engineering.py",
     )
-    t4_feast = feast_materialize_task()
 
-    t1_ingest >> t2_silver >> t3_gold >> t4_feast
+    t1_ingest >> t2_silver >> t3_gold

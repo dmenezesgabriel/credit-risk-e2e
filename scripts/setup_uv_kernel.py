@@ -14,6 +14,7 @@ import logging
 import shutil
 import sys
 from pathlib import Path
+from typing import Any, Dict
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,7 +28,7 @@ assert UV is not None, "uv not found in PATH"
 UV_DIR = str(Path(UV).parent)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Setup Jupyter kernels for uv"
     )
@@ -48,7 +49,7 @@ def main():
 
         kernel_file.parent.mkdir(parents=True, exist_ok=True)
 
-        kernel_config = {
+        kernel_config: Dict[str, Any] = {
             "env": {
                 "PATH": "${PATH}:" + UV_DIR,
                 # Critical: Unset PYTHONPATH to prevent importing from host system
