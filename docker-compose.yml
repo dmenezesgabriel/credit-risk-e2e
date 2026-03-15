@@ -156,6 +156,8 @@ services:
       - "8082:8080"
     networks:
       - credit-risk-net
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres-db
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
       interval: 30s
