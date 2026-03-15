@@ -128,7 +128,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
-      POSTGRES_MULTIPLE_DATABASES: mlflow,airflow
     ports:
       - "5432:5432"
     volumes:
@@ -182,7 +181,6 @@ services:
       <<: *aws-env
       MLFLOW_TRACKING_URI: postgresql://mlflow:mlflow@postgres-db:5432/mlflow
       MLFLOW_S3_ENDPOINT_URL: http://localstack:4566
-      GUNICORN_CMD_ARGS: "--workers 1 --threads 2 --timeout 60"
     command: >
       mlflow server
       --host 0.0.0.0
@@ -339,9 +337,13 @@ services:
 
 volumes:
   postgres_pgdata:
+    name: credit-risk-postgres-data
   portainer_data:
+    name: credit-risk-portainer-data
   uv_cache:
+    name: credit-risk-uv-cache-data
   localstack_data:
+    name: credit-risk-localstack-data
 
 networks:
   credit-risk-net:
