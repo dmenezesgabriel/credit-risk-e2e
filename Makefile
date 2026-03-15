@@ -11,5 +11,5 @@ down:
 	docker exec localstack awslocal s3 sync s3://mlflow-artifacts /var/lib/localstack/s3_backups/mlflow-artifacts
 	DOCKER_GID=$$(stat -c '%g' /var/run/docker.sock) docker compose down
 
-down-v:
+tear-down:
 	DOCKER_GID=$$(stat -c '%g' /var/run/docker.sock) docker compose down -v

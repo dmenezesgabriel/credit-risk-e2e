@@ -12,8 +12,8 @@ x-airflow-env: &airflow-env
   PYTHONWARNINGS: "ignore::SyntaxWarning"
 
 x-airflow-volumes: &airflow-volumes
-  - ./airflow/dags:/opt/airflow/dags
-  - ./:/workspace
+  - ./app/airflow/dags:/opt/airflow/dags
+  - ./app:/workspace
   - /var/run/docker.sock:/var/run/docker.sock
 
 # Tight cap for always-on infra/UI tools that are mostly idle
@@ -69,7 +69,7 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      - ./notebooks:/app
+      - ./app:/app
       - uv_cache:/root/.cache/uv
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp # for sagemaker[local] usage
