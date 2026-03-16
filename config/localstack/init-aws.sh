@@ -5,7 +5,7 @@ set -e
 BACKUP_PATH="/var/lib/localstack/s3_backups"
 
 echo "================================================"
-echo "LocalStack bootstrap — credit-risk-e2e"
+echo "LocalStack bootstrap - credit-risk-e2e"
 echo "================================================"
 
 # Function to create and restore bucket
@@ -32,7 +32,7 @@ aws --endpoint-url=http://localhost:4566 s3api put-object --bucket data-lake --k
 aws --endpoint-url=http://localhost:4566 s3api put-object --bucket data-lake --key gold/ || true
 aws --endpoint-url=http://localhost:4566 s3api put-object --bucket data-lake --key feast/registry/ || true
 
-echo "[DynamoDB] Skipping Feast table pre-creation — managed by feast apply."
+echo "[DynamoDB] Skipping Feast table pre-creation - managed by feast apply."
 echo "================================================"
 echo "LocalStack bootstrap complete."
 echo "================================================"

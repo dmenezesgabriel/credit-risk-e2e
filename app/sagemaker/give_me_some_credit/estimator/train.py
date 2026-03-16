@@ -1,5 +1,5 @@
 """
-train.py — Credit Risk Training Script
+train.py - Credit Risk Training Script
 =======================================
 Runs inside a SageMaker training container (local mode or real AWS).
 Reproduces the full notebook flow:
@@ -22,6 +22,7 @@ Called by pipeline.py via sagemaker.sklearn.SKLearn estimator.
 """
 
 import argparse
+import io
 import json
 import logging
 import os
@@ -30,13 +31,12 @@ import time
 import warnings
 
 import boto3
-import io
+import matplotlib
 import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import shap
-import matplotlib
 
 matplotlib.use("Agg")  # non-interactive backend inside container
 import matplotlib.pyplot as plt
@@ -48,9 +48,9 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     average_precision_score,
+    confusion_matrix,
     roc_auc_score,
     roc_curve,
-    confusion_matrix,
 )
 from sklearn.model_selection import (
     StratifiedKFold,
@@ -71,7 +71,7 @@ logging.basicConfig(
 logger = logging.getLogger("train")
 
 # ---------------------------------------------------------------------------
-# SageMaker injects hyperparameters as CLI args — parse them here.
+# SageMaker injects hyperparameters as CLI args - parse them here.
 # Defaults match the validated notebook values so the script is runnable
 # standalone without pipeline.py.
 # ---------------------------------------------------------------------------
@@ -150,9 +150,13 @@ def evaluate(model, X, y, split_name):
 
 
 def cv_score(model, X, y, n_splits=5):
-    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+    cv = StratifiedKFold(
+        n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE
+    )
     scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc", n_jobs=-1)
-    logger.info(f"[CV-{n_splits}fold] AUC={scores.mean():.4f} ± {scores.std():.4f}")
+    logger.info(
+        f"[CV-{n_splits}fold] AUC={scores.mean():.4f} ± {scores.std():.4f}"
+    )
     return float(scores.mean()), float(scores.std())
 
 
@@ -168,7 +172,7 @@ def optimal_threshold(y_true, y_prob, cost_fn, cost_fp):
 
 
 # ---------------------------------------------------------------------------
-# Step 1 — Load gold from S3
+# Step 1 - Load gold from S3
 # ---------------------------------------------------------------------------
 logger.info("Loading gold layer from S3...")
 s3 = boto3.client(
@@ -188,12 +192,16 @@ keys = [
     if o["Key"].endswith(".parquet")
 ]
 if not keys:
-    raise FileNotFoundError(f"No parquet files found at s3://{args.s3_bucket}/{prefix}")
+    raise FileNotFoundError(
+        f"No parquet files found at s3://{args.s3_bucket}/{prefix}"
+    )
 
 df = pd.concat(
     [
         pd.read_parquet(
-            io.BytesIO(s3.get_object(Bucket=args.s3_bucket, Key=k)["Body"].read())
+            io.BytesIO(
+                s3.get_object(Bucket=args.s3_bucket, Key=k)["Body"].read()
+            )
         )
         for k in keys
     ],
@@ -204,8 +212,8 @@ logger.info(f"Loaded {len(df)} rows, {len(df.columns)} columns")
 
 
 # ---------------------------------------------------------------------------
-# Step 2 — Stratified split (70/15/15)
-# Split happens here — inside the training job — not in the data pipeline.
+# Step 2 - Stratified split (70/15/15)
+# Split happens here - inside the training job - not in the data pipeline.
 # This is the leakage firewall: preprocessor is fit only on X_train below.
 # ---------------------------------------------------------------------------
 X = df.drop(columns=[TARGET])
@@ -219,12 +227,12 @@ X_val, X_test, y_val, y_test = train_test_split(
 )
 logger.info(f"Split: train={len(y_train)} val={len(y_val)} test={len(y_test)}")
 logger.info(
-    f"Default rate — train:{y_train.mean()*100:.2f}% val:{y_val.mean()*100:.2f}% test:{y_test.mean()*100:.2f}%"
+    f"Default rate - train:{y_train.mean()*100:.2f}% val:{y_val.mean()*100:.2f}% test:{y_test.mean()*100:.2f}%"
 )
 
 
 # ---------------------------------------------------------------------------
-# Step 3 — Preprocessing pipeline (fit on train ONLY)
+# Step 3 - Preprocessing pipeline (fit on train ONLY)
 # ---------------------------------------------------------------------------
 numeric_pipeline = Pipeline(
     [
@@ -262,7 +270,7 @@ logger.info(
 
 
 # ---------------------------------------------------------------------------
-# Step 4 — Baseline training (all 4 models)
+# Step 4 - Baseline training (all 4 models)
 # ---------------------------------------------------------------------------
 mlflow.set_tracking_uri(args.mlflow_uri)
 mlflow.set_experiment(args.experiment_name)
@@ -315,7 +323,7 @@ for model_name, model in MODELS.items():
         mlflow.log_param("scale_pos_weight", SPW)
         mlflow.log_param("random_state", RANDOM_STATE)
 
-        # For CV, XGBoost must not have early_stopping_rounds — CV folds
+        # For CV, XGBoost must not have early_stopping_rounds - CV folds
         # have no eval_set, so the callback raises ValueError immediately.
         # We clone the model with early_stopping disabled for CV only,
         # then re-enable it for the final fit with eval_set.
@@ -334,7 +342,10 @@ for model_name, model in MODELS.items():
         if model_name == "xgboost":
             model.set_params(early_stopping_rounds=20)
             model.fit(
-                X_train_proc, y_train, eval_set=[(X_val_proc, y_val)], verbose=False
+                X_train_proc,
+                y_train,
+                eval_set=[(X_val_proc, y_val)],
+                verbose=False,
             )
         else:
             model.fit(X_train_proc, y_train)
@@ -354,7 +365,7 @@ logger.info("Baseline training complete.")
 
 
 # ---------------------------------------------------------------------------
-# Step 5 — Optuna tuning (XGBoost, LightGBM, CatBoost)
+# Step 5 - Optuna tuning (XGBoost, LightGBM, CatBoost)
 # ---------------------------------------------------------------------------
 def make_objective(model_name):
     def objective(trial):
@@ -369,7 +380,9 @@ def make_objective(model_name):
                 "bagging_temperature": trial.suggest_float(
                     "bagging_temperature", 0.0, 1.0
                 ),
-                "random_strength": trial.suggest_float("random_strength", 0.0, 2.0),
+                "random_strength": trial.suggest_float(
+                    "random_strength", 0.0, 2.0
+                ),
                 "border_count": trial.suggest_int("border_count", 32, 128),
                 "scale_pos_weight": SPW,
                 "random_seed": RANDOM_STATE,
@@ -384,11 +397,19 @@ def make_objective(model_name):
                     "learning_rate", 0.01, 0.15, log=True
                 ),
                 "num_leaves": trial.suggest_int("num_leaves", 20, 100),
-                "min_child_samples": trial.suggest_int("min_child_samples", 10, 100),
+                "min_child_samples": trial.suggest_int(
+                    "min_child_samples", 10, 100
+                ),
                 "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
-                "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10.0, log=True),
+                "colsample_bytree": trial.suggest_float(
+                    "colsample_bytree", 0.6, 1.0
+                ),
+                "reg_alpha": trial.suggest_float(
+                    "reg_alpha", 1e-4, 10.0, log=True
+                ),
+                "reg_lambda": trial.suggest_float(
+                    "reg_lambda", 1e-4, 10.0, log=True
+                ),
                 "scale_pos_weight": SPW,
                 "random_state": RANDOM_STATE,
                 "verbosity": -1,
@@ -402,10 +423,18 @@ def make_objective(model_name):
                     "learning_rate", 0.01, 0.15, log=True
                 ),
                 "subsample": trial.suggest_float("subsample", 0.6, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
-                "min_child_weight": trial.suggest_int("min_child_weight", 5, 50),
-                "reg_alpha": trial.suggest_float("reg_alpha", 1e-4, 10.0, log=True),
-                "reg_lambda": trial.suggest_float("reg_lambda", 1e-4, 10.0, log=True),
+                "colsample_bytree": trial.suggest_float(
+                    "colsample_bytree", 0.6, 1.0
+                ),
+                "min_child_weight": trial.suggest_int(
+                    "min_child_weight", 5, 50
+                ),
+                "reg_alpha": trial.suggest_float(
+                    "reg_alpha", 1e-4, 10.0, log=True
+                ),
+                "reg_lambda": trial.suggest_float(
+                    "reg_lambda", 1e-4, 10.0, log=True
+                ),
                 "gamma": trial.suggest_float("gamma", 0.0, 5.0),
                 "scale_pos_weight": SPW,
                 "eval_metric": "auc",
@@ -414,7 +443,12 @@ def make_objective(model_name):
                 "verbosity": 0,
             }
             m = XGBClassifier(**params)
-            m.fit(X_train_proc, y_train, eval_set=[(X_val_proc, y_val)], verbose=False)
+            m.fit(
+                X_train_proc,
+                y_train,
+                eval_set=[(X_val_proc, y_val)],
+                verbose=False,
+            )
             return roc_auc_score(y_val, m.predict_proba(X_val_proc)[:, 1])
 
         m.fit(X_train_proc, y_train)
@@ -449,7 +483,10 @@ for model_name in ["catboost", "lightgbm", "xgboost"]:
     else:
         final_model = XGBClassifier(**best_params, verbosity=0)
         final_model.fit(
-            X_train_proc, y_train, eval_set=[(X_val_proc, y_val)], verbose=False
+            X_train_proc,
+            y_train,
+            eval_set=[(X_val_proc, y_val)],
+            verbose=False,
         )
 
     with mlflow.start_run(run_name=f"{model_name}_tuned") as tuned_run:
@@ -464,7 +501,10 @@ for model_name in ["catboost", "lightgbm", "xgboost"]:
         val_m = evaluate(final_model, X_val_proc, y_val, "val")
         mlflow.log_metric(
             "improvement_vs_baseline",
-            round(val_m["val_auc_roc"] - baseline_results[model_name]["val_auc"], 4),
+            round(
+                val_m["val_auc_roc"] - baseline_results[model_name]["val_auc"],
+                4,
+            ),
         )
         mlflow.sklearn.log_model(final_model, artifact_path="model")
 
@@ -477,12 +517,14 @@ for model_name in ["catboost", "lightgbm", "xgboost"]:
 
 
 # ---------------------------------------------------------------------------
-# Step 6 — Final evaluation on test set
+# Step 6 - Final evaluation on test set
 # Test set is used exactly once, here.
 # ---------------------------------------------------------------------------
 logger.info("=== FINAL TEST SET EVALUATION ===")
 
-tuned_champion_name = max(tuning_results, key=lambda x: tuning_results[x]["val_auc"])
+tuned_champion_name = max(
+    tuning_results, key=lambda x: tuning_results[x]["val_auc"]
+)
 tuned_champion = tuning_results[tuned_champion_name]
 
 all_final = {
@@ -518,7 +560,7 @@ with mlflow.start_run(run_id=tuned_champion["run_id"]):
 
 
 # ---------------------------------------------------------------------------
-# Step 7 — SHAP + save artifacts
+# Step 7 - SHAP + save artifacts
 # ---------------------------------------------------------------------------
 logger.info("Computing SHAP values...")
 explainer = shap.TreeExplainer(tuned_champion["model"])
@@ -530,7 +572,7 @@ fig, ax = plt.subplots(figsize=(10, 7))
 shap.summary_plot(
     shap_values, X_val_proc[:2000], feature_names=ALL_FEATURES, show=False
 )
-ax.set_title(f"SHAP — {tuned_champion_name}")
+ax.set_title(f"SHAP - {tuned_champion_name}")
 plt.tight_layout()
 shap_path = "/tmp/shap_summary.png"
 plt.savefig(shap_path, dpi=120, bbox_inches="tight")
@@ -541,7 +583,7 @@ with mlflow.start_run(run_id=tuned_champion["run_id"]):
 
 
 # ---------------------------------------------------------------------------
-# Step 8 — Register champion in MLflow Model Registry
+# Step 8 - Register champion in MLflow Model Registry
 # ---------------------------------------------------------------------------
 model_uri = f"runs:/{tuned_champion['run_id']}/model"
 mv = client.create_model_version(
@@ -567,7 +609,7 @@ logger.info(
 
 
 # ---------------------------------------------------------------------------
-# Step 9 — Save model + preprocessor to SM_MODEL_DIR
+# Step 9 - Save model + preprocessor to SM_MODEL_DIR
 # SageMaker uploads this directory to S3 after the job completes.
 # The inference handler loads from here.
 # ---------------------------------------------------------------------------

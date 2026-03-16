@@ -4,7 +4,6 @@ import os
 import sys
 
 import boto3  # type: ignore
-
 from src.ingestion.kaggle_extractor import (
     KaggleDataExtractor,
     KaggleExtractionConfig,
@@ -59,7 +58,7 @@ try:
         raise ValueError("Uploaded file is empty")
 
     logger.info(
-        f"Bronze OK — s3://{BUCKET}/{key} ({obj['ContentLength']} bytes)"
+        f"Bronze OK s3://{BUCKET}/{key} ({obj['ContentLength']} bytes)"
     )
 
 except Exception as e:

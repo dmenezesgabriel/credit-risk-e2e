@@ -2,8 +2,8 @@
 import logging
 import sys
 
-from pyspark.sql import SparkSession  # type: ignore
-from pyspark.sql.functions import col, lit, when  # type: ignore
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, lit, when
 
 logging.basicConfig(
     level=logging.INFO,

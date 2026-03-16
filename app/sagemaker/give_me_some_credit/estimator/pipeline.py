@@ -1,5 +1,5 @@
 """
-pipeline.py — SageMaker Local Training Pipeline
+pipeline.py - SageMaker Local Training Pipeline
 ================================================
 Uses a custom Docker image. No ECR auth required.
 
@@ -38,7 +38,7 @@ parser.add_argument("--experiment-name", default="credit_risk_training")
 parser.add_argument("--n-trials", type=int, default=50)
 parser.add_argument("--random-state", type=int, default=42)
 parser.add_argument("--image", default="credit-risk-training:latest")
-parser.add_argument("--network", default="credit-risk-e2e_credit-risk-net")
+parser.add_argument("--network", default="mlops-lab_mlops-lab-net")
 args = parser.parse_args()
 
 # ---------------------------------------------------------------------------
@@ -48,7 +48,7 @@ args = parser.parse_args()
 #   ['docker-compose', '-f', '/tmp/.../docker-compose.yaml', 'up', ...]
 # The yaml path is the 3rd element (index 2).
 # We intercept after the original call, read the yaml file it points to,
-# inject the network, and write it back — all before docker-compose reads it.
+# inject the network, and write it back - all before docker-compose reads it.
 # This is synchronous and deterministic: _compose() writes the file,
 # returns the command, we patch the file, then docker-compose runs.
 # ---------------------------------------------------------------------------
@@ -56,14 +56,16 @@ _original_compose = sm_image._SageMakerContainer._compose
 
 
 def _patched_compose(self, *args, **kwargs):
-    # Call original — this writes the yaml to disk and returns the command list
+    # Call original - this writes the yaml to disk and returns the command list
     compose_cmd = _original_compose(self, *args, **kwargs)
 
     # Extract the yaml path from the command list: [..., '-f', '<path>', ...]
     try:
         yaml_path = compose_cmd[compose_cmd.index("-f") + 1]
     except (ValueError, IndexError):
-        logger.warning("Could not find -f in compose command — skipping network patch")
+        logger.warning(
+            "Could not find -f in compose command - skipping network patch"
+        )
         return compose_cmd
 
     # Read, patch, write back
@@ -93,7 +95,7 @@ def _patched_compose(self, *args, **kwargs):
         logger.info(f"Injected network '{project_network}' into {yaml_path}")
 
     except Exception as e:
-        logger.warning(f"Network patch failed: {e} — continuing without patch")
+        logger.warning(f"Network patch failed: {e} - continuing without patch")
 
     return compose_cmd
 
@@ -130,11 +132,13 @@ def _patched_compose_with_network(self, *args, **kwargs):
         with open(yaml_path, "w") as f:
             yaml.dump(compose_data, f, default_flow_style=False)
 
-        logger.info(f"Patched compose: injected network '{_NETWORK}' into {yaml_path}")
+        logger.info(
+            f"Patched compose: injected network '{_NETWORK}' into {yaml_path}"
+        )
 
     except Exception as e:
         logger.warning(
-            f"Network patch failed ({e}) — container may not reach localstack/mlflow"
+            f"Network patch failed ({e}) - container may not reach localstack/mlflow"
         )
 
     return compose_cmd

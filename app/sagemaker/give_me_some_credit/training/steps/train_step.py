@@ -87,7 +87,7 @@ def evaluate(model, X, y, split_name):
 
 def cv_score(model, X, y, n_splits=5):
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
-    scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc", n_jobs=-1)
+    scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc", n_jobs=1)
     logger.info(f"[CV-{n_splits}] AUC={scores.mean():.4f} ± {scores.std():.4f}")
     return float(scores.mean()), float(scores.std())
 

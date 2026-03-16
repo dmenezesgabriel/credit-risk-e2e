@@ -4,6 +4,9 @@ x-aws-env: &aws-env
   AWS_DEFAULT_REGION: us-east-1
   AWS_ENDPOINT_URL: http://localstack:4566
 
+x-container-env: &container-env
+  NETWORK: "mlops-lab_mlops-lab-net"
+
 x-airflow-env: &airflow-env
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
   AIRFLOW__CORE__LOAD_EXAMPLES: "False"
@@ -65,6 +68,7 @@ x-resources-xlarge: &resources-xlarge
 services:
   jupyter:
     <<: *resources-xlarge # needs headroom for data processing
+    user: "${UID}:${GID}"
     build:
       context: .
       dockerfile: Dockerfile.jupyter
@@ -77,7 +81,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp # for sagemaker[local] usage
     environment:
-      <<: *aws-env
+      <<: [*aws-env, *container-env]
       JUPYTER_TOKEN: ""
       JUPYTER_ENABLE_LAB: "yes"
     command: >
@@ -88,7 +92,9 @@ services:
       --allow-root
       --notebook-dir=/app
     networks:
-      - credit-risk-net
+      - mlops-lab-net
+    env_file:
+      - .env
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8888/api || exit 1"]
       interval: 30s
@@ -121,7 +127,7 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      - credit-risk-net
+      - mlops-lab-net
 
   postgres-db:
     <<: *resources-medium # already tuned via postgres flags, cap above that
@@ -140,7 +146,7 @@ services:
       - postgres_pgdata:/var/lib/postgresql/18/docker
       - ./config/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     networks:
-      - credit-risk-net
+      - mlops-lab-net
     command: >
       postgres
       -c shared_buffers=256MB
@@ -162,7 +168,7 @@ services:
     ports:
       - "8082:8080"
     networks:
-      - credit-risk-net
+      - mlops-lab-net
     environment:
       - ADMINER_DEFAULT_SERVER=postgres-db
     healthcheck:
@@ -196,7 +202,7 @@ services:
       --artifacts-destination s3://mlflow-artifacts
       --allowed-hosts "*"
     networks:
-      - credit-risk-net
+      - mlops-lab-net
     healthcheck:
       test:
         [
@@ -221,7 +227,7 @@ services:
       localstack:
         condition: service_healthy
     environment:
-      <<: [*aws-env, *airflow-env]
+      <<: [*aws-env, *airflow-env, *container-env]
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: admin
@@ -232,7 +238,7 @@ services:
       _AIRFLOW_WWW_USER_EMAIL: admin@local
     volumes: *airflow-volumes
     networks:
-      - credit-risk-net
+      - mlops-lab-net
     command: version
 
   airflow-webserver:
@@ -247,14 +253,14 @@ services:
     ports:
       - "8080:8080"
     environment:
-      <<: [*aws-env, *airflow-env]
+      <<: [*aws-env, *airflow-env, *container-env]
       AIRFLOW__WEBSERVER__WORKERS: 1
       AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: 300
       AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
     volumes: *airflow-volumes
     command: webserver
     networks:
-      - credit-risk-net
+      - mlops-lab-net
     env_file:
       - .env
     healthcheck:
@@ -274,7 +280,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
     environment:
-      <<: [*aws-env, *airflow-env]
+      <<: [*aws-env, *airflow-env, *container-env]
       AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
       AIRFLOW__SCHEDULER__PARALLELISM: 4
       AIRFLOW__SCHEDULER__MAX_THREADS: 1
@@ -282,7 +288,7 @@ services:
     volumes: *airflow-volumes
     command: scheduler
     networks:
-      - credit-risk-net
+      - mlops-lab-net
     env_file:
       - .env
     healthcheck:
@@ -309,7 +315,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
     networks:
-      - credit-risk-net
+      - mlops-lab-net
     healthcheck:
       test:
         [
@@ -331,7 +337,7 @@ services:
       - ./config/homepage:/app/config
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - credit-risk-net
+      - mlops-lab-net
     healthcheck:
       test:
         [
@@ -345,14 +351,14 @@ services:
 
 volumes:
   postgres_pgdata:
-    name: credit-risk-postgres-data
+    name: mlops-lab-postgres-data
   portainer_data:
-    name: credit-risk-portainer-data
+    name: mlops-lab-portainer-data
   uv_cache:
-    name: credit-risk-uv-cache-data
+    name: mlops-lab-uv-cache-data
   localstack_data:
-    name: credit-risk-localstack-data
+    name: mlops-lab-localstack-data
 
 networks:
-  credit-risk-net:
+  mlops-lab-net:
     driver: bridge

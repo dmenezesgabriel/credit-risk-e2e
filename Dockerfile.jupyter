@@ -74,7 +74,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 # Jupyter is run from the venv, NOT uv
 ENV PATH="/opt/venv/bin:${PATH}"
-# Do NOT set PYTHONPATH — kernels manage their own envs via uv
+# Do NOT set PYTHONPATH - kernels manage their own envs via uv
 
 # Jupyter Lab config
 ENV JUPYTER_CONFIG_DIR=/home/.jupyter
@@ -88,7 +88,6 @@ WORKDIR /app
 RUN mkdir -p /scripts
 COPY ./scripts/setup_uv_kernel.py /scripts/setup_uv_kernel.py
 COPY ./scripts/entrypoint.sh /scripts/entrypoint.sh
-COPY ./notebooks ./notebooks
 
 RUN chmod +x /scripts/entrypoint.sh
 

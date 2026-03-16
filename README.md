@@ -160,7 +160,7 @@ Usually the deploy has to be made first in **shadow mode**: the new model runs i
 
 ### 10. Monitoring
 
-- **Data Drift**: PSI — Population Stability Index on input features, PSI > 0.2 is a red flag
+- **Data Drift**: PSI - Population Stability Index on input features, PSI > 0.2 is a red flag
 - **Concept drift**: has the relationship between features and default changed? Monitor AUC on labeled outcomes as they mature, usually 3–6 months lag for credit
 - **Output drift**: is the score distribution shifting?
 
@@ -175,7 +175,7 @@ Set automated retraining triggers. In credit markets, macroeconomic shocks (inte
 - The **gold layer on S3** is Feast's offline store. It's the materialized, engineered feature parquet files that Feast indexes and serves for historical training retrieval. You write to it from your Glue job. Feast reads from it when you call `get_historical_features()`
 - The DynamoDB table is _Feast's online store_. It holds only the latest feature value per entity. You populate it by running `feast materialize`. The inference API calls `get_online_features()` against DynamoDB, getting sub-10ms latency
 - The _Glue job_ writes to gold/S3. It does not split. It does not impute. It does not scale. It engineers features for every entity, for every date partition
-- The training pipeline then asks _Feast "give me all features for these entity IDs at these timestamps"_ and gets back a single flat dataframe. That's where the **split** and **preprocessing** pipeline runs — inside _SageMaker_, on that retrieved dataframe
+- The training pipeline then asks _Feast "give me all features for these entity IDs at these timestamps"_ and gets back a single flat dataframe. That's where the **split** and **preprocessing** pipeline runs - inside _SageMaker_, on that retrieved dataframe
 - The feature store serves both **training** and **inference** using identical feature computation. The preprocessor _(imputer, scaler, capper)_ is a **model artifact**. It belongs to a specific model version, stored alongside the model in MLflow. A new model version might use different capping thresholds. That's fine, it's versioned in MLflow. But the features themselves are shared across all models and all teams
 
 ## Running Locally

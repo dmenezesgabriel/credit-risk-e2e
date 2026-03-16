@@ -1,5 +1,5 @@
 docker run --rm \
-  --network credit-risk-e2e_credit-risk-net \
+  --network mlops-lab_mlops-lab-net \
   -e AWS_ACCESS_KEY_ID=test \
   -e AWS_SECRET_ACCESS_KEY=test \
   -e AWS_DEFAULT_REGION=us-east-1 \

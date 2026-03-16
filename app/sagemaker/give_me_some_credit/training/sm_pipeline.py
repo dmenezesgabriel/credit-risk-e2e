@@ -1,5 +1,5 @@
 """
-sm_pipeline.py — SageMaker Pipeline Definition
+sm_pipeline.py - SageMaker Pipeline Definition
 ===============================================
 Defines a 4-step ML pipeline:
 
@@ -9,7 +9,7 @@ Defines a 4-step ML pipeline:
   Step 4 ProcessingStep  evaluate     → test metrics + conditional register
 
 Each step runs in its own container with its own image.
-Step outputs are wired as S3 URIs between steps — no hardcoded paths.
+Step outputs are wired as S3 URIs between steps - no hardcoded paths.
 
 Local mode: identical to real AWS except session and instance_type.
 To move to production: change LocalSession → Session, "local" → "ml.m5.xlarge".
@@ -31,7 +31,11 @@ import sagemaker
 import sagemaker.local.image as sm_image
 import yaml
 from sagemaker.estimator import Estimator
-from sagemaker.processing import ProcessingInput, ProcessingOutput, ScriptProcessor
+from sagemaker.processing import (
+    ProcessingInput,
+    ProcessingOutput,
+    ScriptProcessor,
+)
 from sagemaker.workflow.condition_step import ConditionStep
 from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
 from sagemaker.workflow.fail_step import FailStep
@@ -52,6 +56,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sm_pipeline")
 
+BASE_DIR = os.path.dirname(os.path.realpath(__file__))
+
 # ---------------------------------------------------------------------------
 # Args
 # ---------------------------------------------------------------------------
@@ -64,12 +70,14 @@ parser.add_argument("--experiment-name", default="credit_risk_pipeline")
 parser.add_argument("--n-trials", type=int, default=50)
 parser.add_argument("--auc-threshold", type=float, default=0.85)
 parser.add_argument("--training-image", default="credit-risk-training:latest")
-parser.add_argument("--processing-image", default="credit-risk-processing:latest")
-parser.add_argument("--network", default="credit-risk-e2e_credit-risk-net")
+parser.add_argument(
+    "--processing-image", default="credit-risk-processing:latest"
+)
+parser.add_argument("--network", default="mlops-lab_mlops-lab-net")
 args = parser.parse_args()
 
 # ---------------------------------------------------------------------------
-# Network patch — same approach as pipeline.py
+# Network patch - same approach as pipeline.py
 # Injects project network into SageMaker's generated compose file
 # so containers can resolve localstack + mlflow hostnames.
 # ---------------------------------------------------------------------------
@@ -85,7 +93,10 @@ def _patched_compose(self, *a, **kw):
             data = yaml.safe_load(f)
         for svc in data.get("services", {}).values():
             svc.setdefault("networks", {})[_NETWORK] = {}
-        data.setdefault("networks", {})[_NETWORK] = {"external": True, "name": _NETWORK}
+        data.setdefault("networks", {})[_NETWORK] = {
+            "external": True,
+            "name": _NETWORK,
+        }
         with open(yaml_path, "w") as f:
             yaml.dump(data, f, default_flow_style=False)
         logger.info(f"Injected network '{_NETWORK}' into {yaml_path}")
@@ -103,8 +114,16 @@ os.environ.setdefault("AWS_ACCESS_KEY_ID", "test")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
+
+def get_step_path(filename: str):
+    """Helper to resolve paths to script files in the steps/ directory."""
+    return os.path.join(BASE_DIR, "steps", filename)
+
+
 boto_session = boto3.Session(
-    aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1"
+    aws_access_key_id="test",
+    aws_secret_access_key="test",
+    region_name="us-east-1",
 )
 sagemaker_session = sagemaker.local.LocalSession(boto_session=boto_session)
 sagemaker_session.local_mode = True
@@ -130,17 +149,21 @@ SHARED_ENV = {
 }
 
 # ---------------------------------------------------------------------------
-# Pipeline parameters — can be overridden at pipeline.start() time
+# Pipeline parameters - can be overridden at pipeline.start() time
 # ---------------------------------------------------------------------------
-p_ingestion_date = ParameterString("IngestionDate", default_value=args.ingestion_date)
+p_ingestion_date = ParameterString(
+    "IngestionDate", default_value=args.ingestion_date
+)
 p_n_trials = ParameterInteger("NTrials", default_value=args.n_trials)
-p_auc_threshold = ParameterFloat("AucThreshold", default_value=args.auc_threshold)
+p_auc_threshold = ParameterFloat(
+    "AucThreshold", default_value=args.auc_threshold
+)
 p_experiment_name = ParameterString(
     "ExperimentName", default_value=args.experiment_name
 )
 
 # ---------------------------------------------------------------------------
-# Step 1 — Preprocessing (ProcessingStep)
+# Step 1 - Preprocessing (ProcessingStep)
 # Uses lightweight processing image.
 # Reads gold from S3, outputs split parquets + preprocessor.pkl
 # ---------------------------------------------------------------------------
@@ -157,7 +180,7 @@ preprocessor_processor = ScriptProcessor(
 step_preprocess = ProcessingStep(
     name="Preprocessing",
     processor=preprocessor_processor,
-    code="/app/notebooks/training/steps/preprocess.py",
+    code=get_step_path("preprocess.py"),
     inputs=[
         ProcessingInput(
             source=GOLD_S3,
@@ -190,7 +213,7 @@ step_preprocess = ProcessingStep(
 )
 
 # ---------------------------------------------------------------------------
-# Step 2 — Baseline Training (TrainingStep)
+# Step 2 - Baseline Training (TrainingStep)
 # Uses heavy training image with all model libraries.
 # Reads splits from Step 1 output URIs.
 # ---------------------------------------------------------------------------
@@ -229,7 +252,7 @@ step_train = TrainingStep(
 )
 
 # ---------------------------------------------------------------------------
-# Step 3 — Tuning (TrainingStep)
+# Step 3 - Tuning (TrainingStep)
 # Reads splits from Step 1 + baseline results from Step 2.
 # ---------------------------------------------------------------------------
 tuning_estimator = Estimator(
@@ -272,7 +295,7 @@ step_tune = TrainingStep(
 )
 
 # ---------------------------------------------------------------------------
-# Step 4 — Evaluation + Conditional Register (ProcessingStep + ConditionStep)
+# Step 4 - Evaluation + Conditional Register (ProcessingStep + ConditionStep)
 # ---------------------------------------------------------------------------
 evaluate_processor = ScriptProcessor(
     command=["python"],
@@ -297,7 +320,7 @@ evaluation_report = PropertyFile(
 step_evaluate = ProcessingStep(
     name="Evaluation",
     processor=evaluate_processor,
-    code="/app/notebooks/training/steps/evaluate.py",
+    code=get_step_path("evaluate.py"),
     inputs=[
         ProcessingInput(
             source=step_preprocess.properties.ProcessingOutputConfig.Outputs[
@@ -329,7 +352,7 @@ step_evaluate = ProcessingStep(
     property_files=[evaluation_report],
 )
 
-# ConditionStep — branches on test_auc from evaluation_report.json
+# ConditionStep - branches on test_auc from evaluation_report.json
 condition_auc = ConditionGreaterThanOrEqualTo(
     left=JsonGet(
         step_name=step_evaluate.name,
@@ -356,8 +379,19 @@ step_condition = ConditionStep(
 # ---------------------------------------------------------------------------
 pipeline = Pipeline(
     name="CreditRiskTrainingPipeline",
-    parameters=[p_ingestion_date, p_n_trials, p_auc_threshold, p_experiment_name],
-    steps=[step_preprocess, step_train, step_tune, step_evaluate, step_condition],
+    parameters=[
+        p_ingestion_date,
+        p_n_trials,
+        p_auc_threshold,
+        p_experiment_name,
+    ],
+    steps=[
+        step_preprocess,
+        step_train,
+        step_tune,
+        step_evaluate,
+        step_condition,
+    ],
     sagemaker_session=sagemaker_session,
 )
 
@@ -377,14 +411,14 @@ execution = pipeline.start(
     }
 )
 
-# LocalPipelineExecution has no .arn — that is a real AWS concept.
+# LocalPipelineExecution has no .arn - that is a real AWS concept.
 # Use execution.name for local mode identification.
 exec_id = getattr(execution, "name", None) or getattr(
     execution, "_execution_id", "local"
 )
 logger.info(f"Pipeline execution started: {exec_id}")
 
-# _LocalPipelineExecution is synchronous — pipeline.start() blocks until complete.
+# _LocalPipelineExecution is synchronous - pipeline.start() blocks until complete.
 # .wait() does not exist on local executions (it is a real AWS polling method).
 # Print step summary from the execution object directly.
 try:
@@ -394,7 +428,7 @@ try:
         name = step.get("StepName", "?")
         status = step.get("StepStatus", "?")
         fail = step.get("FailureReason", "")
-        suffix = f" — {fail}" if fail else ""
+        suffix = f" - {fail}" if fail else ""
         logger.info(f"  {name}: {status}{suffix}")
 except Exception as e:
     logger.info(f"Could not retrieve step summary: {e}")
