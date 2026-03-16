@@ -7,10 +7,9 @@ it would do a python script to trigger glue via aws API
 import os
 from datetime import datetime
 
+from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
-
-from airflow import DAG
 
 PROJECT_ROOT = os.environ["PROJECT_ROOT"]
 

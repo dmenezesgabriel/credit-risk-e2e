@@ -6,8 +6,11 @@ x-aws-env: &aws-env
 
 x-airflow-env: &airflow-env
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
-  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
   AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "30"
+  AIRFLOW__CORE__PARALLELISM: "2"
+  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
   AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
   PYTHONWARNINGS: "ignore::SyntaxWarning"
 
@@ -137,9 +140,11 @@ services:
       - credit-risk-net
     command: >
       postgres
-      -c shared_buffers=128MB
-      -c work_mem=4MB
-      -c maintenance_work_mem=64MB
+      -c shared_buffers=256MB
+      -c work_mem=16MB
+      -c maintenance_work_mem=128MB
+      -c effective_cache_size=768MB
+      -c max_connections=200
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
@@ -173,8 +178,6 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy # waits for pg_isready, not just container start
-      localstack:
-        condition: service_healthy
     ports:
       - "5000:5000"
     environment:
@@ -185,6 +188,7 @@ services:
       mlflow server
       --host 0.0.0.0
       --port 5000
+      --workers 1
       --backend-store-uri postgresql://mlflow:mlflow@postgres-db:5432/mlflow
       --artifacts-destination s3://mlflow-artifacts
       --allowed-hosts "*"
@@ -193,13 +197,14 @@ services:
     healthcheck:
       test:
         [
-          "CMD-SHELL",
-          "curl -f -H 'Host: localhost' http://localhost:5000/health || exit 1",
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')",
         ]
-      interval: 30s
+      interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 3
 
   airflow-init:
     <<: *resources-large
