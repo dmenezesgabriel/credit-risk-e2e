@@ -1,0 +1,16 @@
+# Used by ProcessingStep (preprocess + evaluate).
+FROM python:3.11-slim
+ 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+ 
+COPY requirements.processing.txt /requirements.txt
+RUN pip install --no-cache-dir -r /requirements.txt
+ 
+COPY steps/ /opt/ml/code/
+ 
+WORKDIR /opt/ml/code
+ 
+# SageMaker ProcessingStep calls the script explicitly via ScriptProcessor.
+ENTRYPOINT ["python"]
+ 
