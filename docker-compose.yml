@@ -131,10 +131,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
+      # docker exec postgres-db psql -U postgres -c "SHOW data_directory;"
+      PGDATA: /var/lib/postgresql/18/docker
     ports:
       - "5432:5432"
     volumes:
-      - postgres_pgdata:/var/lib/postgresql/data
+      # docker exec postgres-db psql -U postgres -c "SHOW data_directory;"
+      - postgres_pgdata:/var/lib/postgresql/18/docker
       - ./config/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     networks:
       - credit-risk-net
