@@ -36,7 +36,7 @@ def glue_task(task_id: str, script: str) -> DockerOperator:
         --conf spark.hadoop.fs.s3a.path.style.access=true
         --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
         --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
-        /workspace/glue_jobs/give_me_some_credit/{script} {{{{ ds }}}}
+        /workspace/give_me_some_credit/glue_jobs/{script} {{{{ ds }}}}
         """,  # {{ ds }} is Airflow's logical execution date
         docker_url="unix://var/run/docker.sock",
         network_mode=NETWORK,
