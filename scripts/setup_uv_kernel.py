@@ -11,6 +11,7 @@ use on jupyter notebook cell to install a package:
 import argparse
 import json
 import logging
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -28,6 +29,12 @@ assert UV is not None, "uv not found in PATH"
 UV_DIR = str(Path(UV).parent)
 
 
+def get_kernel_base() -> Path:
+    if "JUPYTER_PATH" in os.environ:
+        return Path(os.environ["JUPYTER_PATH"]) / "kernels"
+    return Path.home() / ".local" / "share" / "jupyter" / "kernels"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Setup Jupyter kernels for uv"
@@ -42,7 +49,8 @@ def main() -> None:
     args = parser.parse_args()
 
     # kernel_base = Path.home() / ".local" / "share" / "jupyter" / "kernels"
-    kernel_base = Path(sys.prefix) / "share" / "jupyter" / "kernels"
+    # kernel_base = Path(sys.prefix) / "share" / "jupyter" / "kernels"
+    kernel_base = get_kernel_base()
 
     for version in args.versions:
         kernel_file = kernel_base / f"uv-{version}" / "kernel.json"
