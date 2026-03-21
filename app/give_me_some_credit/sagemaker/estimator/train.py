@@ -82,7 +82,7 @@ parser.add_argument("--gold-prefix", default="gold/credit_risk/features/")
 parser.add_argument("--ingestion-date", default="2026-03-14")
 parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
 parser.add_argument("--experiment-name", default="credit_risk_training")
-parser.add_argument("--n-trials", type=int, default=50)
+parser.add_argument("--n-trials", type=int, default=10)
 parser.add_argument("--random-state", type=int, default=42)
 parser.add_argument("--cost-fn", type=int, default=10)
 parser.add_argument("--cost-fp", type=int, default=1)
@@ -285,7 +285,7 @@ MODELS = {
     ),
     "xgboost": XGBClassifier(
         scale_pos_weight=SPW,
-        n_estimators=300,
+        n_estimators=100,
         max_depth=6,
         learning_rate=0.05,
         subsample=0.8,
@@ -296,7 +296,7 @@ MODELS = {
     ),
     "lightgbm": LGBMClassifier(
         scale_pos_weight=SPW,
-        n_estimators=300,
+        n_estimators=100,
         max_depth=6,
         learning_rate=0.05,
         subsample=0.8,

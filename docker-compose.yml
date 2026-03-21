@@ -10,9 +10,9 @@ x-container-env: &container-env
 x-airflow-env: &airflow-env
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
   AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-  AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "30"
-  AIRFLOW__CORE__PARALLELISM: "2"
-  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "1"
+  AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: 30
+  AIRFLOW__CORE__PARALLELISM: 1
+  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 1
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
   AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
   PYTHONWARNINGS: "ignore::SyntaxWarning"
@@ -49,8 +49,8 @@ x-resources-large: &resources-large
   deploy:
     resources:
       limits:
-        memory: 1G
-        cpus: "1.00"
+        memory: 768M
+        cpus: "0.75"
       reservations:
         memory: 256M
         cpus: "0.25"
@@ -59,8 +59,8 @@ x-resources-xlarge: &resources-xlarge
   deploy:
     resources:
       limits:
-        memory: 4G
-        cpus: "2.00"
+        memory: 2G
+        cpus: "1.5"
       reservations:
         memory: 256M
         cpus: "0.25"
@@ -109,12 +109,11 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=s3,sqs,sns,dynamodb,lambda,iam,cloudwatch,cloudformation,ec2,kinesis,secretsmanager,ssm,stepfunctions,eventbridge,apigateway,logs
-      - PERSISTENCE=1 # Not working anymore on CE only PRO subscription
+      - SERVICES=s3,sqs,sns,dynamodb,lambda,iam,cloudwatch,ec2,kinesis,secretsmanager,ssm,stepfunctions,eventbridge,apigateway,logs
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
-      - AWS_DEFAULT_REGION=us-east-1
       - LOCALSTACK_HOST=localstack
+      - AWS_DEFAULT_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
     volumes:
@@ -216,15 +215,13 @@ services:
       retries: 3
 
   airflow-init:
-    <<: *resources-large
+    <<: *resources-medium
     group_add:
       - "${DOCKER_GID}"
     image: apache/airflow:2.9.3
     container_name: airflow-init
     depends_on:
       postgres-db:
-        condition: service_healthy
-      localstack:
         condition: service_healthy
     environment:
       <<: [*aws-env, *airflow-env, *container-env]
@@ -242,7 +239,7 @@ services:
     command: version
 
   airflow-webserver:
-    <<: *resources-large
+    <<: *resources-xlarge
     group_add:
       - "${DOCKER_GID}"
     image: apache/airflow:2.9.3
@@ -263,12 +260,14 @@ services:
       - mlops-lab-net
     env_file:
       - .env
+    tmpfs:
+      - /tmp:size=512m
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 150s
+      start_period: 60s
 
   airflow-scheduler:
     <<: *resources-large # scheduler needs burst room when triggering DAGs
@@ -282,15 +281,19 @@ services:
     environment:
       <<: [*aws-env, *airflow-env, *container-env]
       AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
-      AIRFLOW__SCHEDULER__PARALLELISM: 4
+      AIRFLOW__SCHEDULER__PARALLELISM: 1
       AIRFLOW__SCHEDULER__MAX_THREADS: 1
-      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 60
+      AIRFLOW__SCHEDULER__PARSING_PROCESSES: 1
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 300
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 300
     volumes: *airflow-volumes
     command: scheduler
     networks:
       - mlops-lab-net
     env_file:
       - .env
+    tmpfs:
+      - /tmp:size=512m
     healthcheck:
       test:
         [

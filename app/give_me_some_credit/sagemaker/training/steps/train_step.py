@@ -86,9 +86,13 @@ def evaluate(model, X, y, split_name):
 
 
 def cv_score(model, X, y, n_splits=5):
-    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+    cv = StratifiedKFold(
+        n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE
+    )
     scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc", n_jobs=1)
-    logger.info(f"[CV-{n_splits}] AUC={scores.mean():.4f} ± {scores.std():.4f}")
+    logger.info(
+        f"[CV-{n_splits}] AUC={scores.mean():.4f} ± {scores.std():.4f}"
+    )
     return float(scores.mean()), float(scores.std())
 
 
@@ -124,7 +128,7 @@ MODELS = {
     ),
     "xgboost": XGBClassifier(
         scale_pos_weight=SPW,
-        n_estimators=300,
+        n_estimators=100,
         max_depth=6,
         learning_rate=0.05,
         subsample=0.8,
@@ -135,7 +139,7 @@ MODELS = {
     ),
     "lightgbm": LGBMClassifier(
         scale_pos_weight=SPW,
-        n_estimators=300,
+        n_estimators=100,
         max_depth=6,
         learning_rate=0.05,
         subsample=0.8,
@@ -184,7 +188,9 @@ for model_name, model in MODELS.items():
         # Final fit
         if model_name == "xgboost":
             model.set_params(early_stopping_rounds=20)
-            model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+            model.fit(
+                X_train, y_train, eval_set=[(X_val, y_val)], verbose=False
+            )
         else:
             model.fit(X_train, y_train)
 

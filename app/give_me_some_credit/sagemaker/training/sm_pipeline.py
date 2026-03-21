@@ -67,7 +67,7 @@ parser.add_argument("--s3-endpoint", default="http://localstack:4566")
 parser.add_argument("--s3-bucket", default="data-lake")
 parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
 parser.add_argument("--experiment-name", default="credit_risk_pipeline")
-parser.add_argument("--n-trials", type=int, default=50)
+parser.add_argument("--n-trials", type=int, default=10)
 parser.add_argument("--auc-threshold", type=float, default=0.85)
 parser.add_argument("--training-image", default="credit-risk-training:latest")
 parser.add_argument(

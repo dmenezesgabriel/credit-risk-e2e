@@ -11,8 +11,6 @@ from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
 
-PROJECT_ROOT = os.environ["PROJECT_ROOT"]
-
 AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
 AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
 AWS_DEFAULT_REGION = os.environ["AWS_DEFAULT_REGION"]
@@ -30,6 +28,10 @@ def glue_task(task_id: str, script: str) -> DockerOperator:
         image="public.ecr.aws/glue/aws-glue-libs:5",
         command=f"""
         spark-submit
+        --conf spark.driver.memory=512m
+        --conf spark.executor.memory=512m
+        --conf spark.sql.shuffle.partitions=2
+        --conf spark.default.parallelism=2
         --conf spark.hadoop.fs.s3a.endpoint={AWS_ENDPOINT_URL}
         --conf spark.hadoop.fs.s3a.access.key=test
         --conf spark.hadoop.fs.s3a.secret.key=test
@@ -42,9 +44,9 @@ def glue_task(task_id: str, script: str) -> DockerOperator:
         network_mode=NETWORK,
         mounts=[
             Mount(
-                source=PROJECT_ROOT,  # From host, set on .env
+                source="mlops-workspace",  # Docker volume (fast)
                 target="/workspace",
-                type="bind",
+                type="volume",
             )
         ],
         mount_tmp_dir=False,
@@ -56,6 +58,10 @@ def glue_task(task_id: str, script: str) -> DockerOperator:
             "PYTHONPATH": "/workspace",
             "KAGGLE_USERNAME": KAGGLE_USERNAME,
             "KAGGLE_KEY": KAGGLE_KEY,
+            "OMP_NUM_THREADS": 1,
+            "OPENBLAS_NUM_THREADS": 1,
+            "MKL_NUM_THREADS": 1,
+            "NUMEXPR_NUM_THREADS": 1,
         },
         auto_remove="success",
     )
