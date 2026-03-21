@@ -5,20 +5,21 @@ Reads gold parquet from S3, runs the full preprocessing pipeline,
 writes train/val/test splits + fitted preprocessor to output paths.
 
 SageMaker ProcessingStep mounts:
-  Input  channel "gold"  → /opt/ml/processing/input/gold/
-  Output channel "train" → /opt/ml/processing/output/train/
-  Output channel "val"   → /opt/ml/processing/output/val/
-  Output channel "test"  → /opt/ml/processing/output/test/
-  Output channel "model" → /opt/ml/processing/output/preprocessor/
+  Input  channel "gold"  => /opt/ml/processing/input/gold/
+  Output channel "train" => /opt/ml/processing/output/train/
+  Output channel "val"   => /opt/ml/processing/output/val/
+  Output channel "test"  => /opt/ml/processing/output/test/
+  Output channel "model" => /opt/ml/processing/output/preprocessor/
 
 All paths are standard SageMaker ProcessingStep conventions.
 """
 
+import json
 import logging
 import os
-import pickle
 
-import numpy as np
+import mlflow
+import mlflow.sklearn
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -34,9 +35,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("preprocess")
 
-# ---------------------------------------------------------------------------
-# SageMaker ProcessingStep I/O paths
-# ---------------------------------------------------------------------------
+mlflow.set_tracking_uri(
+    os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
+)
+mlflow.set_experiment(
+    os.environ.get("EXPERIMENT_NAME", "credit_risk_pipeline")
+)
+
+
 INPUT_PATH = "/opt/ml/processing/input/gold"
 OUTPUT_TRAIN = "/opt/ml/processing/output/train"
 OUTPUT_VAL = "/opt/ml/processing/output/val"
@@ -46,9 +52,6 @@ OUTPUT_PREP = "/opt/ml/processing/output/preprocessor"
 for path in [OUTPUT_TRAIN, OUTPUT_VAL, OUTPUT_TEST, OUTPUT_PREP]:
     os.makedirs(path, exist_ok=True)
 
-# ---------------------------------------------------------------------------
-# Feature definitions — single source of truth, shared via S3 metadata
-# ---------------------------------------------------------------------------
 TARGET = "serious_dlqin2yrs"
 RANDOM_STATE = 42
 
@@ -74,9 +77,7 @@ CATEGORICAL_FEATURES = ["age_risk_bucket"]
 ALL_FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 AGE_BUCKET_ORDER = [["young", "middle", "senior", "elderly"]]
 
-# ---------------------------------------------------------------------------
-# Step 1 — Load gold parquet
-# ---------------------------------------------------------------------------
+
 logger.info(f"Reading gold from: {INPUT_PATH}")
 parquet_files = [
     os.path.join(INPUT_PATH, f)
@@ -93,10 +94,7 @@ df = pd.concat(
 df = df.drop(columns=["ingestion_date"], errors="ignore")
 logger.info(f"Loaded {len(df)} rows, {len(df.columns)} columns")
 
-# ---------------------------------------------------------------------------
-# Step 2 — Stratified split (70/15/15)
-# SPLIT HAPPENS HERE — before any fitting. This is the leakage firewall.
-# ---------------------------------------------------------------------------
+
 X = df.drop(columns=[TARGET])
 y = df[TARGET]
 
@@ -108,11 +106,11 @@ X_val, X_test, y_val, y_test = train_test_split(
 )
 
 for name, ys in [("train", y_train), ("val", y_val), ("test", y_test)]:
-    logger.info(f"  {name}: {len(ys)} rows | default rate: {ys.mean()*100:.2f}%")
+    logger.info(
+        f"  {name}: {len(ys)} rows | default rate: {ys.mean()*100:.2f}%"
+    )
 
-# ---------------------------------------------------------------------------
-# Step 3 — Fit preprocessor on TRAIN ONLY, transform all splits
-# ---------------------------------------------------------------------------
+
 numeric_pipeline = Pipeline(
     [
         ("imputer", SimpleImputer(strategy="median")),
@@ -147,11 +145,6 @@ X_val_proc = preprocessor.transform(X_val)
 X_test_proc = preprocessor.transform(X_test)
 
 
-# ---------------------------------------------------------------------------
-# Step 4 — Write outputs
-# Each split written as parquet with target column included.
-# Downstream steps read from these S3-backed paths.
-# ---------------------------------------------------------------------------
 def write_split(X_proc, y_series, out_path, split_name):
     df_out = pd.DataFrame(X_proc, columns=ALL_FEATURES)
     df_out[TARGET] = y_series.values
@@ -165,14 +158,19 @@ write_split(X_train_proc, y_train, OUTPUT_TRAIN, "train")
 write_split(X_val_proc, y_val, OUTPUT_VAL, "val")
 write_split(X_test_proc, y_test, OUTPUT_TEST, "test")
 
-# Write fitted preprocessor
-prep_path = os.path.join(OUTPUT_PREP, "preprocessor.pkl")
-with open(prep_path, "wb") as f:
-    pickle.dump(preprocessor, f)
-logger.info(f"Preprocessor saved: {prep_path}")
+with mlflow.start_run(run_name="preprocessing") as run:
+    mlflow.log_param("step", "preprocessing")
+    mlflow.log_param("train_size", len(y_train))
+    mlflow.log_param("val_size", len(y_val))
+    mlflow.log_param("test_size", len(y_test))
+    mlflow.sklearn.log_model(preprocessor, artifact_path="preprocessor")
+    prep_run_id = run.info.run_id
 
-# Write feature config as JSON for downstream steps
-import json
+prep_meta = {"run_id": prep_run_id}
+meta_path = os.path.join(OUTPUT_PREP, "prep_meta.json")
+with open(meta_path, "w") as f:
+    json.dump(prep_meta, f)
+logger.info(f"Preprocessor logged to MLflow run {prep_run_id}")
 
 config = {
     "features": ALL_FEATURES,

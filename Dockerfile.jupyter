@@ -9,9 +9,22 @@ RUN apt-get update && \
         python3-dev \
         pkg-config \
         curl \
+        unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Install AWS CLI v2
+RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip && \
+    unzip /tmp/awscliv2.zip -d /tmp && \
+    /tmp/aws/install --install-dir /opt/aws-cli --bin-dir /opt/aws-cli/bin && \
+    rm -rf /tmp/awscliv2.zip /tmp/aws
+
+# Install AWS SAM CLI
+RUN curl -fsSL "https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip" -o /tmp/samcli.zip && \
+    unzip /tmp/samcli.zip -d /tmp/sam-installation && \
+    /tmp/sam-installation/install --install-dir /opt/aws-sam-cli --bin-dir /opt/aws-sam-cli/bin && \
+    rm -rf /tmp/samcli.zip /tmp/sam-installation
 
 # Create a stable venv for Jupyter
 RUN python -m venv /opt/venv && \
@@ -24,9 +37,8 @@ RUN python -m venv /opt/venv && \
         "catppuccin-jupyterlab==0.2.4" \
         "jupyterlab-code-formatter" \
         "black" \
-        "isort"\
+        "isort" \
         "jupyterlab-spellchecker"
-
 
 # ============================
 #           RUNTIME
@@ -62,6 +74,15 @@ RUN echo '#!/bin/sh\nexec docker compose "$@"' > /usr/local/bin/docker-compose \
 
 # Install Oh my Zsh
 RUN sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
+# Copy AWS CLI from builder
+COPY --from=builder /opt/aws-cli /opt/aws-cli
+
+# Copy AWS SAM CLI from builder
+COPY --from=builder /opt/aws-sam-cli /opt/aws-sam-cli
+
+# Update PATH
+ENV PATH="/opt/venv/bin:/opt/aws-cli/bin:/opt/aws-sam-cli/bin:${PATH}"
 
 # uv for ephemeral kernels only
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv

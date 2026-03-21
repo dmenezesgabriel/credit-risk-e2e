@@ -6,18 +6,18 @@ Runs Optuna tuning on CatBoost, LightGBM, XGBoost.
 Writes tuned model + metadata to /opt/ml/model/.
 
 SageMaker TrainingStep mounts:
-  Input channel "train"    → /opt/ml/input/data/train/
-  Input channel "val"      → /opt/ml/input/data/val/
-  Input channel "baseline" → /opt/ml/input/data/baseline/
-  Output                   → /opt/ml/model/
+  Input channel "train"    => /opt/ml/input/data/train/
+  Input channel "val"      => /opt/ml/input/data/val/
+  Input channel "baseline" => /opt/ml/input/data/baseline/
+  Output                   => /opt/ml/model/
 """
 
 import argparse
 import json
 import logging
 import os
-import pickle
 
+import boto3
 import mlflow
 import mlflow.sklearn
 import numpy as np
@@ -35,9 +35,7 @@ logging.basicConfig(
 logger = logging.getLogger("tune_step")
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-# ---------------------------------------------------------------------------
-# Args
-# ---------------------------------------------------------------------------
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
 parser.add_argument("--experiment-name", default="credit_risk_pipeline")
@@ -52,17 +50,18 @@ RANDOM_STATE = args.random_state
 SPW = 13.9
 TARGET = "serious_dlqin2yrs"
 
-# ---------------------------------------------------------------------------
-# I/O paths
-# ---------------------------------------------------------------------------
+
 TRAIN_PATH = "/opt/ml/input/data/train"
 VAL_PATH = "/opt/ml/input/data/val"
-BASELINE_PATH = "/opt/ml/input/data/baseline"
+S3_BUCKET = os.environ.get("S3_BUCKET", "data-lake")
+S3_ENDPOINT = os.environ.get("AWS_ENDPOINT_URL", "http://localstack:4566")
+PIPELINE_S3_PREFIX = os.environ.get("PIPELINE_S3_PREFIX", "sagemaker/pipeline")
+BASELINE_S3_KEY = f"{PIPELINE_S3_PREFIX}/baseline/baseline_results.json"
+TUNING_S3_KEY = f"{PIPELINE_S3_PREFIX}/tuning/tuning_summary.json"
+
+
 os.makedirs(args.model_dir, exist_ok=True)
 
-# ---------------------------------------------------------------------------
-# Load data
-# ---------------------------------------------------------------------------
 logger.info("Loading splits and baseline results...")
 
 train_df = pd.read_parquet(os.path.join(TRAIN_PATH, "train.parquet"))
@@ -74,23 +73,20 @@ y_train = train_df[TARGET].values
 X_val = val_df[feature_cols].values
 y_val = val_df[TARGET].values
 
-with open(os.path.join(BASELINE_PATH, "baseline_results.json")) as f:
-    baseline_results = json.load(f)
+logger.info("Fetching baseline_results.json from S3...")
+s3 = boto3.client("s3", endpoint_url=S3_ENDPOINT)
+response = s3.get_object(Bucket=S3_BUCKET, Key=BASELINE_S3_KEY)
+baseline_results = json.loads(response["Body"].read())
+logger.info(f"Loaded baseline results for: {list(baseline_results.keys())}")
 
 logger.info(f"Train: {len(X_train)} | Val: {len(X_val)}")
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 def ks_statistic(y_true, y_prob):
     fpr, tpr, _ = roc_curve(y_true, y_prob)
     return float(np.max(tpr - fpr))
 
 
-# ---------------------------------------------------------------------------
-# Objectives
-# ---------------------------------------------------------------------------
 def make_objective(model_name):
     def objective(trial):
         if model_name == "catboost":
@@ -176,9 +172,6 @@ def make_objective(model_name):
     return objective
 
 
-# ---------------------------------------------------------------------------
-# Tuning loop
-# ---------------------------------------------------------------------------
 mlflow.set_tracking_uri(args.mlflow_uri)
 mlflow.set_experiment(args.experiment_name)
 
@@ -204,7 +197,6 @@ for model_name in ["catboost", "lightgbm", "xgboost"]:
         f"  {model_name}: {baseline_auc:.4f} → {best_auc:.4f} ({improvement:+.4f})"
     )
 
-    # Retrain final model with best params
     if model_name == "catboost":
         final = CatBoostClassifier(**best_params, verbose=0)
         final.fit(X_train, y_train)
@@ -236,30 +228,10 @@ for model_name in ["catboost", "lightgbm", "xgboost"]:
             "best_params": best_params,
         }
 
-# ---------------------------------------------------------------------------
-# Write champion model to model dir
-# EvaluateStep reads from here to run final test set evaluation.
-# ---------------------------------------------------------------------------
+
 champion_name = max(tuning_results, key=lambda x: tuning_results[x]["val_auc"])
 champion_meta = tuning_results[champion_name]
 
-# Refit champion one final time (same params, consistent artifact)
-best_params = champion_meta["best_params"]
-if champion_name == "catboost":
-    champion_model = CatBoostClassifier(**best_params, verbose=0)
-    champion_model.fit(X_train, y_train)
-elif champion_name == "lightgbm":
-    champion_model = LGBMClassifier(**best_params, verbosity=-1)
-    champion_model.fit(X_train, y_train)
-else:
-    champion_model = XGBClassifier(**best_params, verbosity=0)
-    champion_model.fit(
-        X_train, y_train, eval_set=[(X_val, y_val)], verbose=False
-    )
-
-model_path = os.path.join(args.model_dir, "model.pkl")
-with open(model_path, "wb") as f:
-    pickle.dump(champion_model, f)
 
 tuning_summary = {
     "champion_name": champion_name,
@@ -270,8 +242,12 @@ tuning_summary = {
     "all_results": tuning_results,
 }
 summary_path = os.path.join(args.model_dir, "tuning_summary.json")
+
 with open(summary_path, "w") as f:
     json.dump(tuning_summary, f, indent=2)
+
+s3.upload_file(summary_path, S3_BUCKET, TUNING_S3_KEY)
+logger.info(f"Uploaded tuning_summary.json → s3://{S3_BUCKET}/{TUNING_S3_KEY}")
 
 logger.info(
     f"Champion: {champion_name} val_auc={champion_meta['val_auc']:.4f}"

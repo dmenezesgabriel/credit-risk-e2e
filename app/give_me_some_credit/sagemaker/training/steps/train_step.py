@@ -6,9 +6,9 @@ Trains 4 baseline models, logs to MLflow.
 Writes best baseline model + all run IDs to /opt/ml/model/.
 
 SageMaker TrainingStep mounts:
-  Input  channel "train" → /opt/ml/input/data/train/
-  Input  channel "val"   → /opt/ml/input/data/val/
-  Output                 → /opt/ml/model/
+  Input  channel "train" => /opt/ml/input/data/train/
+  Input  channel "val"   => /opt/ml/input/data/val/
+  Output                 => /opt/ml/model/
 
 Hyperparameters passed as CLI args by SageMaker.
 """
@@ -17,8 +17,8 @@ import argparse
 import json
 import logging
 import os
-import pickle
 
+import boto3
 import mlflow
 import mlflow.sklearn
 import numpy as np
@@ -37,9 +37,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("train_step")
 
-# ---------------------------------------------------------------------------
-# Args
-# ---------------------------------------------------------------------------
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
 parser.add_argument("--experiment-name", default="credit_risk_pipeline")
@@ -53,17 +51,17 @@ RANDOM_STATE = args.random_state
 SPW = 13.9
 TARGET = "serious_dlqin2yrs"
 
-# ---------------------------------------------------------------------------
-# I/O paths — SageMaker TrainingStep convention
-# ---------------------------------------------------------------------------
 TRAIN_PATH = "/opt/ml/input/data/train"
 VAL_PATH = "/opt/ml/input/data/val"
+
+S3_BUCKET = os.environ.get("S3_BUCKET", "data-lake")
+S3_ENDPOINT = os.environ.get("AWS_ENDPOINT_URL", "http://localstack:4566")
+PIPELINE_S3_PREFIX = os.environ.get("PIPELINE_S3_PREFIX", "sagemaker/pipeline")
+BASELINE_S3_KEY = f"{PIPELINE_S3_PREFIX}/baseline/baseline_results.json"
+
 os.makedirs(args.model_dir, exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 def ks_statistic(y_true, y_prob):
     fpr, tpr, _ = roc_curve(y_true, y_prob)
     return float(np.max(tpr - fpr))
@@ -96,9 +94,6 @@ def cv_score(model, X, y, n_splits=5):
     return float(scores.mean()), float(scores.std())
 
 
-# ---------------------------------------------------------------------------
-# Load splits
-# ---------------------------------------------------------------------------
 logger.info("Loading preprocessed splits...")
 train_file = os.path.join(TRAIN_PATH, "train.parquet")
 val_file = os.path.join(VAL_PATH, "val.parquet")
@@ -116,9 +111,7 @@ logger.info(
     f"Train: {len(X_train)} | Val: {len(X_val)} | Features: {len(feature_cols)}"
 )
 
-# ---------------------------------------------------------------------------
-# Model definitions
-# ---------------------------------------------------------------------------
+
 MODELS = {
     "logistic_regression": LogisticRegression(
         class_weight="balanced",
@@ -157,9 +150,7 @@ MODELS = {
     ),
 }
 
-# ---------------------------------------------------------------------------
-# Training loop
-# ---------------------------------------------------------------------------
+
 mlflow.set_tracking_uri(args.mlflow_uri)
 mlflow.set_experiment(args.experiment_name)
 
@@ -174,7 +165,6 @@ for model_name, model in MODELS.items():
         mlflow.log_param("train_size", len(X_train))
         mlflow.log_param("scale_pos_weight", SPW)
 
-        # CV with early-stopping-safe clone for XGBoost
         if model_name == "xgboost":
             cv_model = clone(model)
             cv_model.set_params(early_stopping_rounds=None)
@@ -204,15 +194,18 @@ for model_name, model in MODELS.items():
             "val_ks": val_m["val_ks"],
         }
 
-# ---------------------------------------------------------------------------
-# Write outputs for TuningStep
-# Saves all run IDs + val metrics so tune_step knows which runs to extend.
-# ---------------------------------------------------------------------------
+
 results_path = os.path.join(args.model_dir, "baseline_results.json")
 with open(results_path, "w") as f:
     json.dump(baseline_results, f, indent=2)
 
-# Log summary
+s3 = boto3.client("s3", endpoint_url=S3_ENDPOINT)
+s3.upload_file(results_path, S3_BUCKET, BASELINE_S3_KEY)
+logger.info(
+    f"Uploaded baseline_results.json → s3://{S3_BUCKET}/{BASELINE_S3_KEY}"
+)
+
+
 logger.info("Baseline summary:")
 for name, r in sorted(
     baseline_results.items(), key=lambda x: x[1]["val_auc"], reverse=True

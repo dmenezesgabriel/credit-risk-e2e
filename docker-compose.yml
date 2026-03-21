@@ -84,6 +84,7 @@ services:
       <<: [*aws-env, *container-env]
       JUPYTER_TOKEN: ""
       JUPYTER_ENABLE_LAB: "yes"
+      # DOCKER_BUILDKIT: 1
     command: >
       jupyter-lab
       --ip=0.0.0.0

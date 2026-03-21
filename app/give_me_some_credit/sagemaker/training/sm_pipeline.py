@@ -3,16 +3,16 @@ sm_pipeline.py - SageMaker Pipeline Definition
 ===============================================
 Defines a 4-step ML pipeline:
 
-  Step 1 ProcessingStep  preprocess   → splits + preprocessor.pkl → S3
-  Step 2 TrainingStep    train_step   → baseline models → S3
-  Step 3 TrainingStep    tune_step    → tuned champion → S3
-  Step 4 ProcessingStep  evaluate     → test metrics + conditional register
+  Step 1 ProcessingStep  preprocess   => splits + preprocessor.pkl => S3
+  Step 2 TrainingStep    train_step   => baseline models => S3
+  Step 3 TrainingStep    tune_step    => tuned champion => S3
+  Step 4 ProcessingStep  evaluate     => test metrics + conditional register
 
 Each step runs in its own container with its own image.
 Step outputs are wired as S3 URIs between steps - no hardcoded paths.
 
 Local mode: identical to real AWS except session and instance_type.
-To move to production: change LocalSession → Session, "local" → "ml.m5.xlarge".
+To move to production: change LocalSession => Session, "local" => "ml.m5.xlarge".
 
 Build images first:
     docker build -t credit-risk-training:latest   -f training/Dockerfile training/
@@ -137,6 +137,7 @@ sagemaker_session.default_bucket = lambda: args.s3_bucket
 ROLE = "arn:aws:iam::111111111111:role/SageMakerExecutionRole"
 GOLD_S3 = f"s3://{args.s3_bucket}/gold/credit_risk/features/ingestion_date={args.ingestion_date}"
 PIPELINE_S3 = f"s3://{args.s3_bucket}/sagemaker/pipeline"
+BASELINE_RESULTS_S3 = f"{PIPELINE_S3}/baseline/baseline_results.json"
 
 # Shared environment injected into every container
 SHARED_ENV = {
@@ -229,7 +230,12 @@ baseline_estimator = Estimator(
         "experiment-name": args.experiment_name,
         "random-state": 42,
     },
-    environment={**SHARED_ENV, "SAGEMAKER_PROGRAM": "train_step.py"},
+    environment={
+        **SHARED_ENV,
+        "SAGEMAKER_PROGRAM": "train_step.py",
+        "S3_BUCKET": args.s3_bucket,
+        "PIPELINE_S3_PREFIX": "sagemaker/pipeline",
+    },
 )
 
 step_train = TrainingStep(
@@ -268,12 +274,17 @@ tuning_estimator = Estimator(
         "n-trials": args.n_trials,
         "random-state": 42,
     },
-    environment={**SHARED_ENV, "SAGEMAKER_PROGRAM": "tune_step.py"},
+    environment={
+        **SHARED_ENV,
+        "SAGEMAKER_PROGRAM": "tune_step.py",
+        "S3_BUCKET": args.s3_bucket,
+        "PIPELINE_S3_PREFIX": "sagemaker/pipeline",
+    },
 )
-
 step_tune = TrainingStep(
     name="HyperparameterTuning",
     estimator=tuning_estimator,
+    depends_on=[step_train],
     inputs={
         "train": sagemaker.inputs.TrainingInput(
             s3_data=step_preprocess.properties.ProcessingOutputConfig.Outputs[
@@ -287,16 +298,10 @@ step_tune = TrainingStep(
             ].S3Output.S3Uri,
             content_type="application/x-parquet",
         ),
-        "baseline": sagemaker.inputs.TrainingInput(
-            s3_data=step_train.properties.ModelArtifacts.S3ModelArtifacts,
-            content_type="application/x-parquet",
-        ),
     },
 )
 
-# ---------------------------------------------------------------------------
-# Step 4 - Evaluation + Conditional Register (ProcessingStep + ConditionStep)
-# ---------------------------------------------------------------------------
+
 evaluate_processor = ScriptProcessor(
     command=["python"],
     image_uri=args.processing_image,
@@ -321,6 +326,7 @@ step_evaluate = ProcessingStep(
     name="Evaluation",
     processor=evaluate_processor,
     code=get_step_path("evaluate.py"),
+    depends_on=[step_tune],
     inputs=[
         ProcessingInput(
             source=step_preprocess.properties.ProcessingOutputConfig.Outputs[
@@ -330,16 +336,14 @@ step_evaluate = ProcessingStep(
             input_name="test",
         ),
         ProcessingInput(
-            source=step_tune.properties.ModelArtifacts.S3ModelArtifacts,
-            destination="/opt/ml/processing/input/model",
-            input_name="model",
+            source=f"{PIPELINE_S3}/tuning/tuning_summary.json",
+            destination="/opt/ml/processing/input/tuning",
+            input_name="tuning",
         ),
         ProcessingInput(
-            source=step_preprocess.properties.ProcessingOutputConfig.Outputs[
-                "preprocessor"
-            ].S3Output.S3Uri,
-            destination="/opt/ml/processing/input/preprocessor",
-            input_name="prep",
+            source=f"{PIPELINE_S3}/preprocessing/preprocessor/prep_meta.json",
+            destination="/opt/ml/processing/input/prep_meta",
+            input_name="prep_meta",
         ),
     ],
     outputs=[
@@ -352,7 +356,7 @@ step_evaluate = ProcessingStep(
     property_files=[evaluation_report],
 )
 
-# ConditionStep - branches on test_auc from evaluation_report.json
+
 condition_auc = ConditionGreaterThanOrEqualTo(
     left=JsonGet(
         step_name=step_evaluate.name,
@@ -370,13 +374,12 @@ step_fail = FailStep(
 step_condition = ConditionStep(
     name="CheckAUCThreshold",
     conditions=[condition_auc],
-    if_steps=[],  # registration handled inside evaluate.py (mlflow)
+    # registration handled inside evaluate.py (mlflow)
+    if_steps=[],
     else_steps=[step_fail],
 )
 
-# ---------------------------------------------------------------------------
-# Pipeline assembly
-# ---------------------------------------------------------------------------
+
 pipeline = Pipeline(
     name="CreditRiskTrainingPipeline",
     parameters=[
