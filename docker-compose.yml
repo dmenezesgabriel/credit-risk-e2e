@@ -23,6 +23,16 @@ x-airflow-volumes: &airflow-volumes
   - ./app:/workspace
   - /var/run/docker.sock:/var/run/docker.sock
 
+x-resources-micro: &resources-micro
+  deploy:
+    resources:
+      limits:
+        memory: 128M
+        cpus: "0.20"
+      reservations:
+        memory: 32M
+        cpus: "0.05"
+
 # Tight cap for always-on infra/UI tools that are mostly idle
 x-resources-small: &resources-small
   deploy:
@@ -352,6 +362,134 @@ services:
       retries: 3
       start_period: 15s
 
+  prometheus:
+    <<: *resources-medium
+    image: prom/prometheus:v3.10.0-busybox
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=1d"
+    networks:
+      - mlops-lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  grafana:
+    <<: *resources-small
+    image: grafana/grafana:12.3.5
+    container_name: grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ENABLE_GZIP: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/grafana_datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./config/grafana/grafana_dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./config/grafana/dashboards:/opt/grafana/dashboards
+    networks:
+      - mlops-lab-net
+    healthcheck:
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  cadvisor:
+    <<: *resources-small
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    container_name: cadvisor
+    ports:
+      - "8085:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    command:
+      - "--housekeeping_interval=30s"
+      - "--docker_only=true"
+    networks:
+      - mlops-lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  tempo:
+    <<: *resources-small
+    image: grafana/tempo:2.7.2
+    container_name: tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./config/tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200" # tempo HTTP API
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    networks:
+      - mlops-lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3200/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  loki:
+    <<: *resources-small
+    image: grafana/loki:3.5.0
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./config/loki/loki.yaml:/etc/loki/loki.yaml
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - mlops-lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  promtail:
+    <<: *resources-micro
+    image: grafana/promtail:3.5.0
+    container_name: promtail
+    command: ["-config.file=/etc/promtail/promtail.yaml"]
+    volumes:
+      - ./config/promtail/promtail.yaml:/etc/promtail/promtail.yaml
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log:/var/log:ro
+    networks:
+      - mlops-lab-net
+    depends_on:
+      loki:
+        condition: service_healthy
+
 volumes:
   postgres_pgdata:
     name: mlops-lab-postgres-data
@@ -361,6 +499,14 @@ volumes:
     name: mlops-lab-uv-cache-data
   localstack_data:
     name: mlops-lab-localstack-data
+  grafana_data:
+    name: mlops-lab-grafana-data
+  prometheus_data:
+    name: mlops-lab-prometheus-data
+  tempo_data:
+    name: mlops-lab-tempo-data
+  loki_data:
+    name: mlops-lab-loki-data
 
 networks:
   mlops-lab-net:

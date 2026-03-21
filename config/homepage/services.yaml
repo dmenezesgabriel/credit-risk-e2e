@@ -1,4 +1,4 @@
-- MLOps Stack:
+- MLOPS:
     - Jupyter Lab:
         href: http://localhost:8888
         description: Notebooks
@@ -29,6 +29,68 @@
           server: my-docker
           stats: true
 
+    - LocalStack:
+        href: http://localhost:4566/health
+        description: AWS mock
+        icon: aws.png
+        widget:
+          type: docker
+          container: localstack
+          server: my-docker
+          stats: true
+
+- OBSERVABILITY:
+    - Prometheus:
+        href: http://localhost:9090
+        description: Metrics collection
+        icon: si-prometheus
+        widget:
+          type: docker
+          container: prometheus
+          server: my-docker
+          stats: true
+
+    - Grafana:
+        href: http://localhost:3001
+        description: Dashboards & visualization
+        icon: si-grafana
+        widget:
+          type: docker
+          container: grafana
+          server: my-docker
+          stats: true
+
+    - cAdvisor:
+        href: http://localhost:8085
+        description: Container metrics
+        icon: si-googlecloud
+        widget:
+          type: docker
+          container: cadvisor
+          server: my-docker
+          stats: true
+
+    - Loki:
+        href: http://localhost:3100/ready
+        description: Log aggregation
+        icon: si-grafana
+        widget:
+          type: docker
+          container: loki
+          server: my-docker
+          stats: true
+
+    - Tempo:
+        href: http://localhost:3200/ready
+        description: Distributed tracing
+        icon: si-grafana
+        widget:
+          type: docker
+          container: tempo
+          server: my-docker
+          stats: true
+
+- MANAGEMENT:
     - Adminer:
         href: http://localhost:8082
         description: Postgres UI
@@ -46,15 +108,5 @@
         widget:
           type: docker
           container: portainer
-          server: my-docker
-          stats: true
-
-    - LocalStack:
-        href: http://localhost:4566/health
-        description: AWS mock
-        icon: aws.png
-        widget:
-          type: docker
-          container: localstack
           server: my-docker
           stats: true

@@ -1,0 +1,40 @@
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  log_level: warn # reduce noise
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  trace_idle_period: 10s
+  max_block_bytes: 1_000_000
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 1h # keep traces only 1h to save disk
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+
+metrics_generator:
+  storage:
+    path: /var/tempo/generator/wal
+
+query_frontend:
+  search:
+    duration_slo: 5s
+    throughput_bytes_slo: 1.073741824e+09

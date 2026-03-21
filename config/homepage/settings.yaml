@@ -3,3 +3,17 @@ theme: dark
 color: slate
 
 refreshInterval: 10000
+
+layout:
+  MLOPS:
+    style: column
+    columns: 4
+    header: true
+  OBSERVABILITY:
+    style: column
+    columns: 5
+    header: true
+  MANAGEMENT:
+    style: column
+    columns: 2
+    header: true
