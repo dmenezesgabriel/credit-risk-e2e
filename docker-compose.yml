@@ -69,7 +69,7 @@ x-resources-xlarge: &resources-xlarge
 services:
   jupyter:
     <<: *resources-xlarge # needs headroom for data processing
-    user: "${UID}:${GID}"
+    user: "${UID:-0}:${GID:-0}"
     build:
       context: .
       dockerfile: Dockerfile.jupyter

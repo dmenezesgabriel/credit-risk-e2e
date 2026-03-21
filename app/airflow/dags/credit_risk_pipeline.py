@@ -20,6 +20,7 @@ KAGGLE_USERNAME = os.environ.get("KAGGLE_USERNAME", "")
 KAGGLE_KEY = os.environ.get("KAGGLE_KEY", "")
 
 NETWORK = os.environ["NETWORK"]
+PROJECT_ROOT = os.environ["PROJECT_ROOT"]
 
 
 def glue_task(task_id: str, script: str) -> DockerOperator:
@@ -44,9 +45,9 @@ def glue_task(task_id: str, script: str) -> DockerOperator:
         network_mode=NETWORK,
         mounts=[
             Mount(
-                source="mlops-workspace",  # Docker volume (fast)
+                source=PROJECT_ROOT,
                 target="/workspace",
-                type="volume",
+                type="bind",
             )
         ],
         mount_tmp_dir=False,
