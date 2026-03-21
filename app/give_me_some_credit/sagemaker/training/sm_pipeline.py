@@ -58,9 +58,7 @@ logger = logging.getLogger("sm_pipeline")
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
-# ---------------------------------------------------------------------------
-# Args
-# ---------------------------------------------------------------------------
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--ingestion-date", default="2026-03-14")
 parser.add_argument("--s3-endpoint", default="http://localstack:4566")
@@ -105,28 +103,15 @@ def _patched_compose(self, *a, **kw):
 sm_image._SageMakerContainer._compose = _patched_compose
 
 # ---------------------------------------------------------------------------
-# SageMaker LocalSession
-# ---------------------------------------------------------------------------
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "test")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test")
-os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
 
-def get_step_path(filename: str):
-    """Helper to resolve paths to script files in the steps/ directory."""
-    return os.path.join(BASE_DIR, "steps", filename)
-
-
-boto_session = boto3.Session(
-    aws_access_key_id="test",
-    aws_secret_access_key="test",
-    region_name="us-east-1",
-)
+boto_session = boto3.Session()
 sagemaker_session = sagemaker.local.LocalSession(boto_session=boto_session)
 sagemaker_session.local_mode = True
 
 ls_s3 = boto_session.client("s3", endpoint_url=args.s3_endpoint)
 ls_sts = boto_session.client("sts", endpoint_url=args.s3_endpoint)
+
 sagemaker_session._s3_client = ls_s3
 sagemaker_session._sts_client = ls_sts
 sagemaker_session.default_bucket = lambda: args.s3_bucket
@@ -160,11 +145,12 @@ p_experiment_name = ParameterString(
     "ExperimentName", default_value=args.experiment_name
 )
 
-# ---------------------------------------------------------------------------
-# Step 1 - Preprocessing (ProcessingStep)
-# Uses lightweight processing image.
-# Reads gold from S3, outputs split parquets + preprocessor.pkl
-# ---------------------------------------------------------------------------
+
+def get_step_path(filename: str):
+    """Helper to resolve paths to script files in the steps/ directory."""
+    return os.path.join(BASE_DIR, "steps", filename)
+
+
 preprocessor_processor = ScriptProcessor(
     command=["python"],
     image_uri=args.training_image,
@@ -210,11 +196,6 @@ step_preprocess = ProcessingStep(
     ],
 )
 
-# ---------------------------------------------------------------------------
-# Step 2 - Baseline Training (TrainingStep)
-# Uses heavy training image with all model libraries.
-# Reads splits from Step 1 output URIs.
-# ---------------------------------------------------------------------------
 baseline_estimator = Estimator(
     image_uri=args.training_image,
     role=ROLE,
@@ -254,10 +235,6 @@ step_train = TrainingStep(
     },
 )
 
-# ---------------------------------------------------------------------------
-# Step 3 - Tuning (TrainingStep)
-# Reads splits from Step 1 + baseline results from Step 2.
-# ---------------------------------------------------------------------------
 tuning_estimator = Estimator(
     image_uri=args.training_image,
     role=ROLE,
