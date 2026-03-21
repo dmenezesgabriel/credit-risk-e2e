@@ -8,8 +8,7 @@ Defines a 4-step ML pipeline:
   Step 3 TrainingStep    tune_step    => tuned champion => S3
   Step 4 ProcessingStep  evaluate     => test metrics + conditional register
 
-Each step runs in its own container with its own image.
-Step outputs are wired as S3 URIs between steps — no hardcoded paths.
+Each step runs in its own container with the same custom image.
 
 Switch environments:
     Local : --mode local  --s3-endpoint http://localstack:4566 --network <n>
