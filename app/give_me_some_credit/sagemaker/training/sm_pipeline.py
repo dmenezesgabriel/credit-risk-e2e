@@ -70,9 +70,6 @@ parser.add_argument("--experiment-name", default="credit_risk_pipeline")
 parser.add_argument("--n-trials", type=int, default=10)
 parser.add_argument("--auc-threshold", type=float, default=0.85)
 parser.add_argument("--training-image", default="credit-risk-training:latest")
-parser.add_argument(
-    "--processing-image", default="credit-risk-processing:latest"
-)
 parser.add_argument("--network", default="mlops-lab_mlops-lab-net")
 args = parser.parse_args()
 
@@ -170,7 +167,7 @@ p_experiment_name = ParameterString(
 # ---------------------------------------------------------------------------
 preprocessor_processor = ScriptProcessor(
     command=["python"],
-    image_uri=args.processing_image,
+    image_uri=args.training_image,
     role=ROLE,
     instance_count=1,
     instance_type="local",
@@ -304,7 +301,7 @@ step_tune = TrainingStep(
 
 evaluate_processor = ScriptProcessor(
     command=["python"],
-    image_uri=args.processing_image,
+    image_uri=args.training_image,
     role=ROLE,
     instance_count=1,
     instance_type="local",
