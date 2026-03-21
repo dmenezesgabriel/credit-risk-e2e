@@ -13,6 +13,7 @@ x-airflow-env: &airflow-env
   AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: 30
   AIRFLOW__CORE__PARALLELISM: 1
   AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 1
+  AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
   AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
   PYTHONWARNINGS: "ignore::SyntaxWarning"
@@ -253,7 +254,6 @@ services:
       <<: [*aws-env, *airflow-env, *container-env]
       AIRFLOW__WEBSERVER__WORKERS: 1
       AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: 300
-      AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
     volumes: *airflow-volumes
     command: webserver
     networks:

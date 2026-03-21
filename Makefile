@@ -1,7 +1,13 @@
-.PHONY: up down down-v
+.PHONY: up down tear-down
+
+UID := $(shell id -u)
+GID := $(shell id -g)
+DOCKER_GID := $(shell stat -c '%g' /var/run/docker.sock)
+DOCKER_ENV := UID=$(UID) GID=$(GID) DOCKER_GID=$(DOCKER_GID)
+COMPOSE := $(DOCKER_ENV) docker compose
 
 up:
-	DOCKER_GID=$$(stat -c '%g' /var/run/docker.sock) docker compose up -d
+	$(COMPOSE) up -d
 
 down:
 	@echo "Syncing S3 data to volume before shutdown..."
@@ -9,7 +15,7 @@ down:
 	docker exec localstack mkdir -p /var/lib/localstack/s3_backups/mlflow-artifacts
 	docker exec localstack awslocal s3 sync s3://data-lake /var/lib/localstack/s3_backups/data-lake
 	docker exec localstack awslocal s3 sync s3://mlflow-artifacts /var/lib/localstack/s3_backups/mlflow-artifacts
-	DOCKER_GID=$$(stat -c '%g' /var/run/docker.sock) docker compose down
+	$(COMPOSE) down
 
 tear-down:
-	DOCKER_GID=$$(stat -c '%g' /var/run/docker.sock) docker compose down -v
+	$(COMPOSE) down -v
