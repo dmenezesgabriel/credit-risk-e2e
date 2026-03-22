@@ -51,7 +51,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("sm_pipeline")
+logger = logging.getLogger("sagemaker_pipeline_give_me_some_credit")
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -89,14 +89,16 @@ def get_pipeline(
     }
 
     # Pipeline parameters — can be overridden at pipeline.start() time
-    p_ingestion_date = ParameterString(
+    pipeline_ingestion_date = ParameterString(
         "IngestionDate", default_value=ingestion_date
     )
-    p_n_trials = ParameterInteger("NTrials", default_value=n_trials)
-    p_auc_threshold = ParameterFloat(
+    pipeline_number_trials = ParameterInteger(
+        "NTrials", default_value=n_trials
+    )
+    pipeline_auc_threshold = ParameterFloat(
         "AucThreshold", default_value=auc_threshold
     )
-    p_experiment_name = ParameterString(
+    pipeline_experiment_name = ParameterString(
         "ExperimentName", default_value=experiment_name
     )
 
@@ -298,7 +300,7 @@ def get_pipeline(
                     property_file=evaluation_report,
                     json_path="test_auc",
                 ),
-                right=p_auc_threshold,
+                right=pipeline_auc_threshold,
             )
         ],
         if_steps=[],  # registration handled inside evaluate.py via MLflow
@@ -313,10 +315,10 @@ def get_pipeline(
     return Pipeline(
         name="CreditRiskTrainingPipeline",
         parameters=[
-            p_ingestion_date,
-            p_n_trials,
-            p_auc_threshold,
-            p_experiment_name,
+            pipeline_ingestion_date,
+            pipeline_number_trials,
+            pipeline_auc_threshold,
+            pipeline_experiment_name,
         ],
         steps=[
             step_preprocess,

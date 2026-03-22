@@ -1,0 +1,130 @@
+{
+	"name": "MLOps Lab",
+	"image": "mcr.microsoft.com/devcontainers/base:debian-12",
+	"mounts": [
+		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+	],
+	"features": {
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+			"moby": false,
+			"installDockerBuildx": true,
+			"version": "latest",
+			"dockerDashComposeVersion": "v2"
+		},
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true,
+			"installOhMyZsh": true,
+			"upgradePackages": false
+		},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/aws-cli:1": {},
+		"ghcr.io/devcontainers/features/python:1": {
+			"version": "3.11",
+			"installTools": false
+		},
+		"ghcr.io/devcontainers/features/node:1": {},
+		"ghcr.io/devcontainers/features/terraform:1": {}
+	},
+	"postStartCommand": "bash .devcontainer/post-start.sh",
+	"forwardPorts": [
+		3000, // homepage
+		3001, // grafana
+		3100, // loki
+		3200, // tempo HTTP API
+		4317, // OTLP gRPC
+		4318, // OTLP HTTP
+		4566, // localstack
+		5000, // mlflow
+		5432, // postgres
+		8080, // airflow webserver
+		8082, // adminer
+		8085, // cadvisor
+		8888, // jupyter
+		9000, // portainer
+		9090 // prometheus
+	],
+	"portsAttributes": {
+		"3000": {
+			"label": "Homepage",
+			"onAutoForward": "openBrowser"
+		},
+		"3001": {
+			"label": "Grafana",
+			"onAutoForward": "silent"
+		},
+		"3100": {
+			"label": "Loki",
+			"onAutoForward": "silent"
+		},
+		"3200": {
+			"label": "Tempo",
+			"onAutoForward": "silent"
+		},
+		"4566": {
+			"label": "LocalStack",
+			"onAutoForward": "silent"
+		},
+		"5000": {
+			"label": "MLflow",
+			"onAutoForward": "silent"
+		},
+		"5432": {
+			"label": "Postgres",
+			"onAutoForward": "silent"
+		},
+		"8080": {
+			"label": "Airflow",
+			"onAutoForward": "silent"
+		},
+		"8082": {
+			"label": "Adminer",
+			"onAutoForward": "silent"
+		},
+		"8085": {
+			"label": "cAdvisor",
+			"onAutoForward": "silent"
+		},
+		"8888": {
+			"label": "Jupyter",
+			"onAutoForward": "silent"
+		},
+		"9000": {
+			"label": "Portainer",
+			"onAutoForward": "silent"
+		},
+		"9090": {
+			"label": "Prometheus",
+			"onAutoForward": "silent"
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-toolsai.jupyter",
+				"ms-azuretools.vscode-docker",
+				"redhat.vscode-yaml",
+				"esbenp.prettier-vscode",
+				"eamodio.gitlens",
+				"charliermarsh.ruff",
+				"amazonwebservices.aws-toolkit-vscode"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "zsh",
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"editor.formatOnSave": true,
+				"[python]": {
+					"editor.defaultFormatter": "charliermarsh.ruff"
+				},
+				"jupyter.jupyterServerType": "remote",
+				"jupyter.serverUri": "http://localhost:8888"
+			}
+		}
+	},
+	"hostRequirements": {
+		"cpus": 8,
+		"memory": "16gb",
+		"storage": "32gb"
+	}
+}
