@@ -55,6 +55,8 @@ logger = logging.getLogger("sagemaker_pipeline_give_me_some_credit")
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
+RANDOM_STATE = 42
+
 
 def get_step_path(filename: str) -> str:
     return os.path.join(BASE_DIR, "steps", filename)
@@ -78,13 +80,14 @@ def get_pipeline(
     pipeline_s3 = f"s3://{s3_bucket}/sagemaker/pipeline"
     gold_s3 = f"s3://{s3_bucket}/gold/credit_risk/features/ingestion_date={ingestion_date}"
 
-    # Environment injected into every container
+    # Infra/credentials vars shared across all containers.
+    # Script-level config (mlflow, experiment, random state) is passed
+    # explicitly via arguments= or hyperparameters= on each step.
     shared_env = {
         "AWS_ACCESS_KEY_ID": "test",
         "AWS_SECRET_ACCESS_KEY": "test",
         "AWS_DEFAULT_REGION": aws_region,
         "AWS_ENDPOINT_URL": s3_endpoint,
-        "MLFLOW_TRACKING_URI": mlflow_uri,
         "GIT_PYTHON_REFRESH": "quiet",
     }
 
@@ -117,12 +120,20 @@ def get_pipeline(
             env=shared_env,
         ),
         code=get_step_path("preprocess.py"),
+        job_arguments=[
+            "--mlflow-uri",
+            mlflow_uri,
+            "--experiment-name",
+            experiment_name,
+            "--random-state",
+            str(RANDOM_STATE),
+        ],
         inputs=[
             ProcessingInput(
                 source=gold_s3,
                 destination="/opt/ml/processing/input/gold",
                 input_name="gold",
-            )
+            ),
         ],
         outputs=[
             ProcessingOutput(
@@ -163,7 +174,7 @@ def get_pipeline(
             hyperparameters={
                 "mlflow-uri": mlflow_uri,
                 "experiment-name": experiment_name,
-                "random-state": 42,
+                "random-state": RANDOM_STATE,
             },
             environment={
                 **shared_env,
@@ -191,9 +202,8 @@ def get_pipeline(
     # -------------------------------------------------------------------------
     # Step 3 — Hyperparameter Tuning
     # -------------------------------------------------------------------------
-    # Since we are using localmode, AWS HyperparameterTuning class is not
-    # available, because is a managed service, then we use Training Step as a
-    # replacement
+    # HyperparameterTuner is a managed AWS service unavailable in local mode.
+    # A TrainingStep is used as a drop-in replacement.
     step_tune = TrainingStep(
         name="HyperparameterTuning",
         estimator=Estimator(
@@ -207,7 +217,7 @@ def get_pipeline(
                 "mlflow-uri": mlflow_uri,
                 "experiment-name": experiment_name,
                 "n-trials": n_trials,
-                "random-state": 42,
+                "random-state": RANDOM_STATE,
             },
             environment={
                 **shared_env,
@@ -251,14 +261,18 @@ def get_pipeline(
             instance_count=1,
             instance_type=instance_type,
             sagemaker_session=sagemaker_session,
-            env={
-                **shared_env,
-                "EXPERIMENT_NAME": experiment_name,
-                "AUC_THRESHOLD": str(auc_threshold),
-            },
+            env=shared_env,
         ),
         code=get_step_path("evaluate.py"),
         depends_on=[step_tune],
+        job_arguments=[
+            "--mlflow-uri",
+            mlflow_uri,
+            "--experiment-name",
+            experiment_name,
+            "--auc-threshold",
+            str(auc_threshold),
+        ],
         inputs=[
             ProcessingInput(
                 source=step_preprocess.properties.ProcessingOutputConfig.Outputs[
@@ -303,7 +317,7 @@ def get_pipeline(
                 right=pipeline_auc_threshold,
             )
         ],
-        if_steps=[],  # registration handled inside evaluate.py via MLflow
+        if_steps=[],
         else_steps=[
             FailStep(
                 name="ModelFailedThreshold",
@@ -332,7 +346,9 @@ def get_pipeline(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Credit risk SageMaker pipeline"
+    )
     parser.add_argument("--mode", default="local", choices=["local", "aws"])
     parser.add_argument("--ingestion-date", default="2026-03-21")
     parser.add_argument("--s3-endpoint", default="http://localstack:4566")
@@ -349,8 +365,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-if __name__ == "__main__":
-    args = parse_args()
+def main(args: argparse.Namespace) -> None:
+    logger.info(f"Args: {vars(args)}")
 
     sagemaker_session, _ = make_sagemaker_session(
         mode=args.mode,
@@ -378,19 +394,8 @@ if __name__ == "__main__":
         s3_endpoint=args.s3_endpoint,
     )
 
-    logger.info("Starting CreditRiskTrainingPipeline...")
-    params = [
-        ("mode", args.mode),
-        ("ingestion_date", args.ingestion_date),
-        ("n_trials", args.n_trials),
-        ("auc_threshold", args.auc_threshold),
-        ("mlflow_uri", args.mlflow_uri),
-    ]
-
-    for label, value in params:
-        logger.info(f"  {label:<15}: {value}")
-
     pipeline.upsert(role_arn=role)
+
     execution = pipeline.start(
         parameters={
             "IngestionDate": args.ingestion_date,
@@ -412,9 +417,12 @@ if __name__ == "__main__":
             name = step.get("StepName", "?")
             status = step.get("StepStatus", "?")
             fail = step.get("FailureReason", "")
-            suffix = f" - {fail}" if fail else ""
-            logger.info(f"  {name}: {status}{suffix}")
+            logger.info(f"  {name}: {status}{' - ' + fail if fail else ''}")
     except Exception as e:
         logger.info(f"Could not retrieve step summary: {e}")
 
     logger.info("Pipeline complete.")
+
+
+if __name__ == "__main__":
+    main(parse_args())
