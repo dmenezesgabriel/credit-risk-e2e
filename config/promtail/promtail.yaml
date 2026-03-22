@@ -7,17 +7,61 @@ positions:
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
 
 scrape_configs:
   - job_name: docker
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 15s
+
     relabel_configs:
+      # Strip leading slash Docker adds to container names
       - source_labels: [__meta_docker_container_name]
+        regex: "/(.*)"
         target_label: container
+
       - source_labels:
           [__meta_docker_container_label_com_docker_compose_service]
         target_label: service
+
+      - source_labels:
+          [__meta_docker_container_label_com_docker_compose_project]
+        target_label: project
+
+      # Drop promtail's own logs — avoids feedback loops
+      - source_labels: [container]
+        regex: "promtail"
+        action: drop
+
     pipeline_stages:
-      - docker: {}
+      # Parse Docker's JSON envelope: {"log":"...", "stream":"stdout", "time":"..."}
+      - json:
+          expressions:
+            output: log # the actual log line
+            stream: stream # stdout / stderr
+
+      # Use the parsed log line as the log entry (not the raw JSON wrapper)
+      - output:
+          source: output
+
+      # Promote stream (stdout/stderr) as a label — low cardinality, useful
+      - labels:
+          stream:
+
+      # Extract log level from the line content into a label
+      # Works for: ERROR, error, WARN, Warning, INFO, DEBUG, CRITICAL, FATAL
+      - match:
+          selector: '{container=~".+"}'
+          stages:
+            - regex:
+                expression: "(?i)(?P<level>debug|info|warn(?:ing)?|error|critical|fatal)"
+            - labels:
+                level:
+
+      # Drop empty / whitespace-only lines — they add zero value and inflate costs
+      - drop:
+          expression: "^\\s*$"

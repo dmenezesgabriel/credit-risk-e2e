@@ -11,7 +11,7 @@ layout:
     header: true
   OBSERVABILITY:
     style: column
-    columns: 5
+    columns: 3
     header: true
   MANAGEMENT:
     style: column

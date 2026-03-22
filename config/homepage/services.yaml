@@ -70,26 +70,6 @@
           server: my-docker
           stats: true
 
-    - Loki:
-        href: http://localhost:3100/ready
-        description: Log aggregation
-        icon: si-grafana
-        widget:
-          type: docker
-          container: loki
-          server: my-docker
-          stats: true
-
-    - Tempo:
-        href: http://localhost:3200/ready
-        description: Distributed tracing
-        icon: si-grafana
-        widget:
-          type: docker
-          container: tempo
-          server: my-docker
-          stats: true
-
 - MANAGEMENT:
     - Adminer:
         href: http://localhost:8082

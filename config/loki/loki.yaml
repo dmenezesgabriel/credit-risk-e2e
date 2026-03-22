@@ -1,7 +1,11 @@
 auth_enabled: false
 
+# ── Run as a single monolithic process — no distributed ring needed ──────────
+target: all
+
 server:
   http_listen_port: 3100
+  grpc_listen_port: 9096
   log_level: warn
 
 common:
@@ -14,7 +18,7 @@ common:
   ring:
     instance_addr: 127.0.0.1
     kvstore:
-      store: inmemory
+      store: inmemory # in-memory ring — never persisted, never stale after restart
 
 schema_config:
   configs:
@@ -26,12 +30,34 @@ schema_config:
         prefix: index_
         period: 24h
 
+# ── Ingester: register in ring immediately, don't wait for peers ─────────────
+ingester:
+  lifecycler:
+    join_after: 0s # join ring instantly on startup
+    final_sleep: 0s # don't linger on shutdown
+    num_tokens: 512
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+  chunk_idle_period: 1h
+  max_chunk_age: 2h
+  chunk_retain_period: 30s
+
+# ── Query scheduler: single replica is fine, don't require a quorum ─────────
+query_scheduler:
+  max_outstanding_requests_per_tenant: 2048
+
 limits_config:
-  retention_period: 24h # only keep 1 day of logs
+  retention_period: 24h
   ingestion_rate_mb: 4
   ingestion_burst_size_mb: 8
   max_streams_per_user: 1000
   max_chunks_per_query: 2000
+  allow_structured_metadata: false
+  max_label_names_per_series: 15
+  max_label_value_length: 2048
+  unordered_writes: true
 
 compactor:
   working_directory: /loki/compactor
@@ -39,5 +65,12 @@ compactor:
   retention_delete_delay: 2h
   delete_request_store: filesystem
 
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 50
+
 analytics:
-  reporting_enabled: false # no phoning home
+  reporting_enabled: false

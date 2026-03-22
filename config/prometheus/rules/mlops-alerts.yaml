@@ -1,0 +1,77 @@
+groups:
+  - name: container_health
+    interval: 60s
+    rules:
+      # Alert when a container uses more than 85% of its CPU limit
+      - alert: ContainerHighCPU
+        expr: |
+          sum by (name) (
+            rate(container_cpu_usage_seconds_total{image!=""}[2m])
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} high CPU"
+          description: "Container {{ $labels.name }} CPU usage is {{ $value | humanizePercentage }} for 5+ minutes."
+
+      # Alert when a container uses more than 90% of its memory limit
+      - alert: ContainerHighMemory
+        expr: |
+          (
+            container_memory_working_set_bytes{image!=""}
+            /
+            container_spec_memory_limit_bytes{image!=""}
+          ) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} high memory"
+          description: "Container {{ $labels.name }} is using {{ $value | humanizePercentage }} of its memory limit."
+
+      # Alert when a container OOM-kills
+      - alert: ContainerOOMKilled
+        expr: |
+          kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+          OR
+          container_oom_events_total > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} OOM killed"
+          description: "Container {{ $labels.name }} was OOM-killed."
+
+  - name: mlops_services
+    interval: 60s
+    rules:
+      # MLflow — high request error rate (needs /metrics endpoint)
+      # Uncomment when mlflow metrics are scraped
+      # - alert: MLflowHighErrorRate
+      #   expr: rate(mlflow_http_requests_total{status=~"5.."}[5m]) > 0.1
+      #   for: 2m
+      #   labels:
+      #     severity: warning
+      #   annotations:
+      #     summary: "MLflow elevated 5xx error rate"
+
+      # Postgres — disk I/O saturation proxy
+      - alert: PostgresDiskWriteHigh
+        expr: |
+          rate(container_fs_writes_bytes_total{name="postgres-db"}[2m]) > 50000000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Postgres high disk write rate"
+          description: "Postgres is writing {{ $value | humanize }}B/s — possible heavy load."
+
+      # Airflow scheduler restart / crash detection
+      - alert: AirflowSchedulerRestarted
+        expr: |
+          changes(container_start_time_seconds{name="airflow-scheduler"}[10m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Airflow scheduler container restarted"
+          description: "The airflow-scheduler container has restarted in the last 10 minutes."

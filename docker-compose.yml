@@ -458,7 +458,7 @@ services:
 
   loki:
     <<: *resources-small
-    image: grafana/loki:3.5.0
+    image: grafana/loki:3.3.2
     container_name: loki
     command: ["-config.file=/etc/loki/loki.yaml"]
     volumes:
@@ -477,7 +477,7 @@ services:
 
   promtail:
     <<: *resources-micro
-    image: grafana/promtail:3.5.0
+    image: grafana/promtail:3.3.2
     container_name: promtail
     command: ["-config.file=/etc/promtail/promtail.yaml"]
     volumes:

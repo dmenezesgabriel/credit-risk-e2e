@@ -1,0 +1,423 @@
+{
+    "description": "MLOps Lab — is everything healthy right now?",
+    "editable": true,
+    "graphTooltip": 1,
+    "links": [
+        {
+            "title": "Logs",
+            "url": "/d/mlops-logs",
+            "type": "link",
+            "icon": "external link",
+            "targetBlank": false
+        },
+        {
+            "title": "Resources",
+            "url": "/d/mlops-resources",
+            "type": "link",
+            "icon": "external link",
+            "targetBlank": false
+        }
+    ],
+    "panels": [
+        {
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "title": "Health at a glance",
+            "type": "row",
+            "collapsed": false
+        },
+        {
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "description": "Error lines per second across all containers",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.1
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    },
+                    "unit": "reqps",
+                    "mappings": []
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 1
+            },
+            "id": 2,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "textMode": "auto"
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum(rate({container=~\".+\"} |~ `(?i)(error|exception|critical|fatal)` [5m]))",
+                    "legendFormat": "errors/s",
+                    "refId": "A"
+                }
+            ],
+            "title": "Error rate",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "description": "Total log lines per second",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "blue",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "reqps"
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 1
+            },
+            "id": 3,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "center",
+                "orientation": "auto",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "textMode": "auto"
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum(rate({container=~\".+\"}[5m]))",
+                    "legendFormat": "lines/s",
+                    "refId": "A"
+                }
+            ],
+            "title": "Log volume",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "description": "Container using the most CPU right now",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.5
+                            },
+                            {
+                                "color": "red",
+                                "value": 0.85
+                            }
+                        ]
+                    },
+                    "unit": "percentunit"
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 1
+            },
+            "id": 4,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "textMode": "auto"
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "topk(1, sum by (name) (rate(container_cpu_usage_seconds_total{image!=\"\"}[2m])))",
+                    "legendFormat": "{{name}}",
+                    "refId": "A",
+                    "instant": true
+                }
+            ],
+            "title": "Top CPU container",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "${prom}"
+            },
+            "description": "Container using the most memory right now",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 400000000
+                            },
+                            {
+                                "color": "red",
+                                "value": 900000000
+                            }
+                        ]
+                    },
+                    "unit": "bytes"
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 1
+            },
+            "id": 5,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "justifyMode": "center",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "textMode": "auto"
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "${prom}"
+                    },
+                    "expr": "topk(1, container_memory_working_set_bytes{image!=\"\"})",
+                    "legendFormat": "{{name}}",
+                    "refId": "A",
+                    "instant": true
+                }
+            ],
+            "title": "Top memory container",
+            "type": "stat"
+        },
+        {
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 5
+            },
+            "id": 10,
+            "title": "Error trend",
+            "type": "row",
+            "collapsed": false
+        },
+        {
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 15,
+                        "lineWidth": 1.5,
+                        "showPoints": "never"
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 7,
+                "w": 24,
+                "x": 0,
+                "y": 6
+            },
+            "id": 11,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum by (container) (rate({container=~\".+\"} |~ `(?i)(error|exception|critical|fatal)` [2m]))",
+                    "legendFormat": "{{container}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Error rate by container",
+            "type": "timeseries"
+        },
+        {
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 13
+            },
+            "id": 20,
+            "title": "Recent errors",
+            "type": "row",
+            "collapsed": false
+        },
+        {
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 14
+            },
+            "id": 21,
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "showLabels": true,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "{container=~\".+\"} |~ `(?i)(error|exception|critical|fatal|traceback)`",
+                    "refId": "A"
+                }
+            ],
+            "title": "All errors — last hour",
+            "type": "logs"
+        }
+    ],
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "tags": [
+        "mlops"
+    ],
+    "templating": {
+        "list": [
+            {
+                "name": "prom",
+                "type": "datasource",
+                "query": "prometheus",
+                "refresh": 1,
+                "label": "Prometheus"
+            },
+            {
+                "name": "loki",
+                "type": "datasource",
+                "query": "loki",
+                "refresh": 1,
+                "label": "Loki"
+            }
+        ]
+    },
+    "time": {
+        "from": "now-1h",
+        "to": "now"
+    },
+    "timezone": "browser",
+    "title": "MLOps Lab — Overview",
+    "uid": "mlops-overview",
+    "version": 1
+}
