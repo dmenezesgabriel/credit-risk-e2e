@@ -77,7 +77,8 @@ def get_pipeline(
     s3_endpoint: str,
 ) -> Pipeline:
 
-    pipeline_s3 = f"s3://{s3_bucket}/sagemaker/pipeline"
+    pipeline_s3_prefix = f"projects/{experiment_name}/sagemaker/pipeline"
+    pipeline_s3 = f"s3://{s3_bucket}/{pipeline_s3_prefix}"
     gold_s3 = f"s3://{s3_bucket}/gold/credit_risk/features/ingestion_date={ingestion_date}"
 
     # Infra/credentials vars shared across all containers.
@@ -174,13 +175,14 @@ def get_pipeline(
             hyperparameters={
                 "mlflow-uri": mlflow_uri,
                 "experiment-name": experiment_name,
+                "s3-bucket": s3_bucket,
+                "s3-prefix": pipeline_s3_prefix,
+                "s3-endpoint": s3_endpoint,
                 "random-state": RANDOM_STATE,
             },
             environment={
                 **shared_env,
                 "SAGEMAKER_PROGRAM": "train_step.py",
-                "S3_BUCKET": s3_bucket,
-                "PIPELINE_S3_PREFIX": "sagemaker/pipeline",
             },
         ),
         inputs={
@@ -216,14 +218,15 @@ def get_pipeline(
             hyperparameters={
                 "mlflow-uri": mlflow_uri,
                 "experiment-name": experiment_name,
+                "s3-bucket": s3_bucket,
+                "s3-prefix": pipeline_s3_prefix,
+                "s3-endpoint": s3_endpoint,
                 "n-trials": n_trials,
                 "random-state": RANDOM_STATE,
             },
             environment={
                 **shared_env,
                 "SAGEMAKER_PROGRAM": "tune_step.py",
-                "S3_BUCKET": s3_bucket,
-                "PIPELINE_S3_PREFIX": "sagemaker/pipeline",
             },
         ),
         depends_on=[step_train],
