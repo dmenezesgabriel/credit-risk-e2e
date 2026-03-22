@@ -189,6 +189,9 @@ def get_pipeline(
     # -------------------------------------------------------------------------
     # Step 3 — Hyperparameter Tuning
     # -------------------------------------------------------------------------
+    # Since we are using localmode, AWS HyperparameterTuning class is not
+    # available, because is a managed service, then we use Training Step as a
+    # replacement
     step_tune = TrainingStep(
         name="HyperparameterTuning",
         estimator=Estimator(
