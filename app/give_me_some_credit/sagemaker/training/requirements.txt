@@ -1,3 +1,4 @@
+# requirements.txt
 # Pinned deps installed inside the SageMaker training container.
 # Keep in sync with what was validated in the notebook.
 pandas==2.2.3
