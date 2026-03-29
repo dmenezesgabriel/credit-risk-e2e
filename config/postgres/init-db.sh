@@ -1,4 +1,5 @@
 #!/bin/bash
+# config/init-db.sh
 set -e
 
 # Create mlflow database + user

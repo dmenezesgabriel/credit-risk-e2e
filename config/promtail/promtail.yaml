@@ -1,3 +1,5 @@
+# config/promptail.yaml
+
 server:
   http_listen_port: 9080
   log_level: warn

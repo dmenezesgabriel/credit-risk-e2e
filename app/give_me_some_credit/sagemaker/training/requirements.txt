@@ -13,3 +13,4 @@ pandas==2.2.3
 numpy==2.2.3
 shap==0.47.2
 imbalanced-learn==0.13.0
+structlog>=24.1.0

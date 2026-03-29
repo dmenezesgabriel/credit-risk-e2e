@@ -1,3 +1,5 @@
+# config/loki.yaml
+
 auth_enabled: false
 
 # ── Run as a single monolithic process — no distributed ring needed ──────────

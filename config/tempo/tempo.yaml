@@ -1,3 +1,5 @@
+# config/tempo.yaml
+
 stream_over_http_enabled: true
 
 server:
