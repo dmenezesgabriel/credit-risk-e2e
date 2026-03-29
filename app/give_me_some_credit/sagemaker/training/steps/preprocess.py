@@ -27,17 +27,49 @@ import mlflow.sklearn
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+    OTLPLogExporter,
+)
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.resources import Resource
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger("preprocess")
+
+
+def setup_otel_logging(service_name: str):
+    """Configures OTEL logging (Loki) and Console logging (stdout)."""
+    provider = LoggerProvider(
+        resource=Resource.create({"service.name": service_name})
+    )
+    set_logger_provider(provider)
+
+    endpoint = os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"]
+
+    exporter = OTLPLogExporter(endpoint=endpoint, insecure=True)
+    provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+    otel_handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(otel_handler)
+    root_logger.addHandler(console_handler)
+
+    return provider
+
 
 # ---------------------------------------------------------------------------
 # SageMaker I/O paths
@@ -253,50 +285,55 @@ def log_to_mlflow(
 # Main
 # ---------------------------------------------------------------------------
 def main(args: argparse.Namespace) -> None:
+    otel_provider = setup_otel_logging("sagemaker-pipeline-preprocess")
+
     logger.info(f"Args: {vars(args)}")
 
-    mlflow.set_tracking_uri(args.mlflow_uri)
-    mlflow.set_experiment(args.experiment_name)
+    try:
+        mlflow.set_tracking_uri(args.mlflow_uri)
+        mlflow.set_experiment(args.experiment_name)
 
-    df = load_data(INPUT_PATH)
-    logger.info(f"Loaded {len(df):,} rows, {len(df.columns)} columns")
+        df = load_data(INPUT_PATH)
+        logger.info(f"Loaded {len(df):,} rows, {len(df.columns)} columns")
 
-    X, y = df.drop(columns=[TARGET]), df[TARGET]
-    X_train, X_val, X_test, y_train, y_val, y_test = split_data(
-        X, y, args.random_state
-    )
-
-    for name, ys in [("train", y_train), ("val", y_val), ("test", y_test)]:
-        logger.info(
-            f"  {name}: {len(ys):,} rows | default rate: {ys.mean() * 100:.2f}%"
+        X, y = df.drop(columns=[TARGET]), df[TARGET]
+        X_train, X_val, X_test, y_train, y_val, y_test = split_data(
+            X, y, args.random_state
         )
 
-    preprocessor = build_preprocessor()
-    X_train_proc, X_val_proc, X_test_proc = fit_and_transform(
-        preprocessor, X_train, X_val, X_test
-    )
+        for name, ys in [("train", y_train), ("val", y_val), ("test", y_test)]:
+            logger.info(
+                f"  {name}: {len(ys):,} rows | default rate: {ys.mean() * 100:.2f}%"
+            )
 
-    save_splits(
-        splits={
-            "train": (X_train_proc, y_train),
-            "val": (X_val_proc, y_val),
-            "test": (X_test_proc, y_test),
-        },
-        output_paths={
-            "train": OUTPUT_TRAIN,
-            "val": OUTPUT_VAL,
-            "test": OUTPUT_TEST,
-        },
-    )
+        preprocessor = build_preprocessor()
+        X_train_proc, X_val_proc, X_test_proc = fit_and_transform(
+            preprocessor, X_train, X_val, X_test
+        )
 
-    run_id = log_to_mlflow(
-        preprocessor, y_train, y_val, y_test, args.random_state
-    )
-    logger.info(f"Preprocessor logged to MLflow run: {run_id}")
+        save_splits(
+            splits={
+                "train": (X_train_proc, y_train),
+                "val": (X_val_proc, y_val),
+                "test": (X_test_proc, y_test),
+            },
+            output_paths={
+                "train": OUTPUT_TRAIN,
+                "val": OUTPUT_VAL,
+                "test": OUTPUT_TEST,
+            },
+        )
 
-    save_metadata(run_id, args.random_state, y_train, y_val, y_test)
+        run_id = log_to_mlflow(
+            preprocessor, y_train, y_val, y_test, args.random_state
+        )
+        logger.info(f"Preprocessor logged to MLflow run: {run_id}")
 
-    logger.info("Preprocessing complete.")
+        save_metadata(run_id, args.random_state, y_train, y_val, y_test)
+
+        logger.info("Preprocessing complete.")
+    finally:
+        otel_provider.shutdown()
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 {
-    "description": "MLOps Lab — Docker service logs (Promtail). For pipeline/OTEL logs see Pipelines dashboard.",
+    "description": "MLOps Lab — SageMaker pipeline and ETL logs via OTEL. Source: service_namespace=mlops.",
     "editable": true,
     "graphTooltip": 1,
     "links": [
@@ -10,8 +10,8 @@
             "icon": "external link"
         },
         {
-            "title": "Pipelines",
-            "url": "/d/mlops-pipelines",
+            "title": "Logs",
+            "url": "/d/mlops-logs",
             "type": "link",
             "icon": "external link"
         },
@@ -26,7 +26,7 @@
         {
             "id": 1,
             "type": "row",
-            "title": "Log explorer — docker services",
+            "title": "Pipeline log explorer",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -38,8 +38,8 @@
         {
             "id": 2,
             "type": "timeseries",
-            "title": "Log volume — $container",
-            "description": "Log lines/s per Docker container (Promtail source only)",
+            "title": "Log volume — $step",
+            "description": "Log lines/s per pipeline step (OTEL source, service_namespace=mlops)",
             "datasource": {
                 "type": "loki",
                 "uid": "${loki}"
@@ -79,8 +79,8 @@
                         "type": "loki",
                         "uid": "${loki}"
                     },
-                    "expr": "sum by (container) (rate({container=~\"$container\"}[2m]))",
-                    "legendFormat": "{{container}}",
+                    "expr": "sum by (service_name) (rate({service_namespace=\"mlops\", service_name=~\"$step\"}[2m]))",
+                    "legendFormat": "{{service_name}}",
                     "refId": "A"
                 }
             ]
@@ -88,8 +88,8 @@
         {
             "id": 3,
             "type": "logs",
-            "title": "Logs — $container",
-            "description": "Streamed from Promtail. Labels: container, service, stream, level.",
+            "title": "Logs — $step",
+            "description": "Shipped via OTEL Collector → Loki. Labels: service_name, service_namespace, service_version.",
             "datasource": {
                 "type": "loki",
                 "uid": "${loki}"
@@ -114,7 +114,7 @@
                         "type": "loki",
                         "uid": "${loki}"
                     },
-                    "expr": "{container=~\"$container\"} |= `$search`",
+                    "expr": "{service_namespace=\"mlops\", service_name=~\"$step\"} |= `$search`",
                     "refId": "A"
                 }
             ]
@@ -122,7 +122,7 @@
         {
             "id": 10,
             "type": "row",
-            "title": "Errors & warnings — docker services",
+            "title": "Errors & warnings — pipelines",
             "collapsed": false,
             "gridPos": {
                 "h": 1,
@@ -134,8 +134,8 @@
         {
             "id": 11,
             "type": "logs",
-            "title": "Errors",
-            "description": "error, exception, critical, fatal, traceback — Docker containers only",
+            "title": "Pipeline errors",
+            "description": "error, exception, critical, fatal, traceback — OTEL pipeline steps only",
             "datasource": {
                 "type": "loki",
                 "uid": "${loki}"
@@ -160,7 +160,7 @@
                         "type": "loki",
                         "uid": "${loki}"
                     },
-                    "expr": "{container=~\"$container\"} |~ `(?i)(error|exception|critical|fatal|traceback)`",
+                    "expr": "{service_namespace=\"mlops\", service_name=~\"$step\"} |~ `(?i)(error|exception|critical|fatal|traceback)`",
                     "refId": "A"
                 }
             ]
@@ -168,8 +168,8 @@
         {
             "id": 12,
             "type": "logs",
-            "title": "Warnings",
-            "description": "warn / warning lines excluding errors — Docker containers only",
+            "title": "Pipeline warnings",
+            "description": "warn / warning lines excluding errors — OTEL pipeline steps only",
             "datasource": {
                 "type": "loki",
                 "uid": "${loki}"
@@ -194,7 +194,72 @@
                         "type": "loki",
                         "uid": "${loki}"
                     },
-                    "expr": "{container=~\"$container\"} |~ `(?i)(warn|warning)` !~ `(?i)(error|critical|fatal)`",
+                    "expr": "{service_namespace=\"mlops\", service_name=~\"$step\"} |~ `(?i)(warn|warning)` !~ `(?i)(error|critical|fatal)`",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "type": "row",
+            "title": "Step timing",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 30
+            }
+        },
+        {
+            "id": 21,
+            "type": "timeseries",
+            "title": "Log activity per step — detect stalls",
+            "description": "A flat line from an active step means it has stopped emitting logs. Use alongside Tempo traces for end-to-end timing.",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 7,
+                "w": 24,
+                "x": 0,
+                "y": 31
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 5,
+                        "lineWidth": 1.5,
+                        "showPoints": "auto"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "sum",
+                        "lastNotNull"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum by (service_name) (count_over_time({service_namespace=\"mlops\"}[1m]))",
+                    "legendFormat": "{{service_name}}",
                     "refId": "A"
                 }
             ]
@@ -215,17 +280,18 @@
                 "label": "Loki"
             },
             {
-                "name": "container",
+                "name": "step",
                 "type": "query",
-                "label": "Container",
+                "label": "Pipeline step",
+                "description": "Populated from service_name label set by OTEL_SERVICE_NAME in each SageMaker step",
                 "datasource": {
                     "type": "loki",
                     "uid": "${loki}"
                 },
                 "definition": "",
                 "query": {
-                    "label": "container",
-                    "stream": "{}",
+                    "label": "service_name",
+                    "stream": "{service_namespace=\"mlops\"}",
                     "type": 1
                 },
                 "allValue": ".+",
@@ -260,11 +326,11 @@
         ]
     },
     "time": {
-        "from": "now-1h",
+        "from": "now-3h",
         "to": "now"
     },
     "timezone": "browser",
-    "title": "MLOps Lab — Logs",
-    "uid": "mlops-logs",
+    "title": "MLOps Lab — Pipelines",
+    "uid": "mlops-pipelines",
     "version": 1
 }

@@ -221,3 +221,4 @@ Airflow UI Retries:
 - [feast.dev docs](https://rtd.feast.dev/en/latest/#feast.repo_config.RepoConfig)
 - [sagemaker-pipelines-bridging-the-gap-between-local-testing-and-deployment](https://aws.plainenglish.io/sagemaker-pipelines-bridging-the-gap-between-local-testing-and-deployment-b5fcd8694b80)
 - [automating-feature-engineering-workflows-with-amazon-managed-workflows-for-apache-airflow-mwaa](https://medium.com/@TransformationalLeader_Surjeet/automating-feature-engineering-workflows-with-amazon-managed-workflows-for-apache-airflow-mwaa-b557aa46b1f5)
+- [integrating-opentelemetry-for-logging-in-python-a-practical-guide](https://medium.com/@lakinduboteju/integrating-opentelemetry-for-logging-in-python-a-practical-guide-fe52bff61edc)

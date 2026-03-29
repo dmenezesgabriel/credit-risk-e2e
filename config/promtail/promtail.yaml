@@ -1,4 +1,4 @@
-# config/promptail.yaml
+# config/promtail.yaml
 
 server:
   http_listen_port: 9080
@@ -21,7 +21,17 @@ scrape_configs:
         refresh_interval: 15s
 
     relabel_configs:
-      # Strip leading slash Docker adds to container names
+      # 1. Map the Docker label 'promtail_enabled' to an internal label
+      - source_labels: [__meta_docker_container_label_promtail_enabled]
+        target_label: promtail_enabled
+
+      # 2. THE OPT-IN FILTER: Only keep containers where promtail_enabled is 'true'
+      # This automatically ignores your SageMaker steps (which use OTLP direct)
+      - source_labels: [promtail_enabled]
+        regex: "true"
+        action: keep
+
+      # 3. Standard Metadata Mapping (Only runs for containers that pass the 'keep' filter)
       - source_labels: [__meta_docker_container_name]
         regex: "/(.*)"
         target_label: container
@@ -34,28 +44,22 @@ scrape_configs:
           [__meta_docker_container_label_com_docker_compose_project]
         target_label: project
 
-      # Drop promtail's own logs — avoids feedback loops
-      - source_labels: [container]
-        regex: "promtail"
-        action: drop
-
     pipeline_stages:
-      # Parse Docker's JSON envelope: {"log":"...", "stream":"stdout", "time":"..."}
+      # Parse Docker's JSON envelope
       - json:
           expressions:
-            output: log # the actual log line
-            stream: stream # stdout / stderr
+            output: log
+            stream: stream
 
-      # Use the parsed log line as the log entry (not the raw JSON wrapper)
+      # Use the parsed log line as the log entry
       - output:
           source: output
 
-      # Promote stream (stdout/stderr) as a label — low cardinality, useful
+      # Promote stream (stdout/stderr) as a label
       - labels:
           stream:
 
-      # Extract log level from the line content into a label
-      # Works for: ERROR, error, WARN, Warning, INFO, DEBUG, CRITICAL, FATAL
+      # Extract log level from the line content
       - match:
           selector: '{container=~".+"}'
           stages:
@@ -64,6 +68,6 @@ scrape_configs:
             - labels:
                 level:
 
-      # Drop empty / whitespace-only lines — they add zero value and inflate costs
+      # Drop empty / whitespace-only lines
       - drop:
           expression: "^\\s*$"

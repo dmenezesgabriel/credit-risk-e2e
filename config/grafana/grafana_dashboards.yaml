@@ -1,3 +1,5 @@
+# config/grafana/grafana_dashboards.yaml
+
 apiVersion: 1
 
 providers:

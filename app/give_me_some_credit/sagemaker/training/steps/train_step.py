@@ -31,17 +31,49 @@ import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier
 from lightgbm import LGBMClassifier
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+    OTLPLogExporter,
+)
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.resources import Resource
 from sklearn.base import clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, roc_auc_score, roc_curve
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from xgboost import XGBClassifier
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger("train_step")
+
+
+def setup_otel_logging(service_name: str):
+    """Configures OTEL logging (Loki) and Console logging (stdout)."""
+    provider = LoggerProvider(
+        resource=Resource.create({"service.name": service_name})
+    )
+    set_logger_provider(provider)
+
+    endpoint = os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"]
+
+    exporter = OTLPLogExporter(endpoint=endpoint, insecure=True)
+    provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+    otel_handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(otel_handler)
+    root_logger.addHandler(console_handler)
+
+    return provider
+
 
 # ---------------------------------------------------------------------------
 # SageMaker I/O paths
@@ -279,63 +311,69 @@ def log_baseline_run(
 # Main
 # ---------------------------------------------------------------------------
 def main(args: argparse.Namespace) -> None:
+    otel_provider = setup_otel_logging("sagemaker-pipeline-train")
+
     logger.info(f"Args: {vars(args)}")
+    try:
+        mlflow.set_tracking_uri(args.mlflow_uri)
+        mlflow.set_experiment(args.experiment_name)
 
-    mlflow.set_tracking_uri(args.mlflow_uri)
-    mlflow.set_experiment(args.experiment_name)
+        X_train, y_train, X_val, y_val = load_data(TRAIN_PATH, VAL_PATH)
 
-    X_train, y_train, X_val, y_val = load_data(TRAIN_PATH, VAL_PATH)
+        models = build_models(args.random_state)
+        results = {}
 
-    models = build_models(args.random_state)
-    results = {}
+        for model_name, model in models.items():
+            logger.info(f"Training baseline: {model_name}")
 
-    for model_name, model in models.items():
-        logger.info(f"Training baseline: {model_name}")
+            model, cv_auc_mean, cv_auc_std = fit_model(
+                model_name,
+                model,
+                X_train,
+                y_train,
+                X_val,
+                y_val,
+                args.random_state,
+            )
+            train_metrics = compute_split_metrics(
+                model, X_train, y_train, "train"
+            )
+            val_metrics = compute_split_metrics(model, X_val, y_val, "val")
 
-        model, cv_auc_mean, cv_auc_std = fit_model(
-            model_name,
-            model,
-            X_train,
-            y_train,
-            X_val,
-            y_val,
-            args.random_state,
+            run_id = log_baseline_run(
+                model_name,
+                model,
+                cv_auc_mean,
+                cv_auc_std,
+                train_metrics,
+                val_metrics,
+                X_train,
+            )
+            results[model_name] = {
+                "run_id": run_id,
+                "val_auc": val_metrics["val_auc_roc"],
+                "val_ks": val_metrics["val_ks"],
+            }
+
+        logger.info("Baseline summary:")
+        for name, r in sorted(
+            results.items(), key=lambda x: x[1]["val_auc"], reverse=True
+        ):
+            logger.info(
+                f"  {name}: val_auc={r['val_auc']:.4f} ks={r['val_ks']:.4f}"
+            )
+
+        save_results(
+            results,
+            args.model_dir,
+            args.s3_bucket,
+            args.s3_prefix,
+            args.s3_endpoint,
         )
-        train_metrics = compute_split_metrics(model, X_train, y_train, "train")
-        val_metrics = compute_split_metrics(model, X_val, y_val, "val")
 
-        run_id = log_baseline_run(
-            model_name,
-            model,
-            cv_auc_mean,
-            cv_auc_std,
-            train_metrics,
-            val_metrics,
-            X_train,
-        )
-        results[model_name] = {
-            "run_id": run_id,
-            "val_auc": val_metrics["val_auc_roc"],
-            "val_ks": val_metrics["val_ks"],
-        }
-
-    logger.info("Baseline summary:")
-    for name, r in sorted(
-        results.items(), key=lambda x: x[1]["val_auc"], reverse=True
-    ):
-        logger.info(
-            f"  {name}: val_auc={r['val_auc']:.4f} ks={r['val_ks']:.4f}"
-        )
-
-    save_results(
-        results,
-        args.model_dir,
-        args.s3_bucket,
-        args.s3_prefix,
-        args.s3_endpoint,
-    )
-
-    logger.info("Baseline training complete.")
+        logger.info("Baseline training complete.")
+    finally:
+        otel_provider.shutdown()
 
 
 # ---------------------------------------------------------------------------

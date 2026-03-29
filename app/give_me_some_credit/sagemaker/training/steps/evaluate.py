@@ -31,6 +31,13 @@ import mlflow.exceptions
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+    OTLPLogExporter,
+)
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.resources import Resource
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
@@ -38,11 +45,36 @@ from sklearn.metrics import (
     roc_curve,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger("evaluate")
+
+
+def setup_otel_logging(service_name: str):
+    """Configures OTEL logging (Loki) and Console logging (stdout)."""
+    provider = LoggerProvider(
+        resource=Resource.create({"service.name": service_name})
+    )
+    set_logger_provider(provider)
+
+    endpoint = os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"]
+
+    exporter = OTLPLogExporter(endpoint=endpoint, insecure=True)
+    provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+    otel_handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(otel_handler)
+    root_logger.addHandler(console_handler)
+
+    return provider
+
 
 # ---------------------------------------------------------------------------
 # SageMaker I/O paths
@@ -199,64 +231,69 @@ def update_champion_run_metrics(
 # Main
 # ---------------------------------------------------------------------------
 def main(args: argparse.Namespace) -> None:
+    otel_provider = setup_otel_logging("sagemaker-pipeline-evaluate")
+
     logger.info(f"Args: {vars(args)}")
 
-    mlflow.set_tracking_uri(args.mlflow_uri)
-    mlflow.set_experiment(args.experiment_name)
+    try:
+        mlflow.set_tracking_uri(args.mlflow_uri)
+        mlflow.set_experiment(args.experiment_name)
 
-    X_test, y_test = load_test_data(TEST_PATH)
-    model, tuning_summary = load_tuning_results(TUNING_DIR)
-    assert_preprocessor_accessible(PREP_META_DIR)
+        X_test, y_test = load_test_data(TEST_PATH)
+        model, tuning_summary = load_tuning_results(TUNING_DIR)
+        assert_preprocessor_accessible(PREP_META_DIR)
 
-    logger.info(
-        f"Test set: {len(y_test):,} rows | default rate: {y_test.mean() * 100:.2f}%"
-    )
+        logger.info(
+            f"Test set: {len(y_test):,} rows | default rate: {y_test.mean() * 100:.2f}%"
+        )
 
-    y_prob = model.predict_proba(X_test)[:, 1]
-    metrics = compute_classification_metrics(y_test, y_prob)
-    optimal_threshold = find_optimal_threshold(y_test, y_prob)
+        y_prob = model.predict_proba(X_test)[:, 1]
+        metrics = compute_classification_metrics(y_test, y_prob)
+        optimal_threshold = find_optimal_threshold(y_test, y_prob)
 
-    logger.info(
-        f"TEST AUC={metrics['test_auc']:.4f} "
-        f"KS={metrics['test_ks']:.4f} "
-        f"Gini={metrics['test_gini']:.4f} "
-        f"Optimal threshold={optimal_threshold:.4f}"
-    )
+        logger.info(
+            f"TEST AUC={metrics['test_auc']:.4f} "
+            f"KS={metrics['test_ks']:.4f} "
+            f"Gini={metrics['test_gini']:.4f} "
+            f"Optimal threshold={optimal_threshold:.4f}"
+        )
 
-    update_champion_run_metrics(
-        tuning_summary["champion_run_id"],
-        {**metrics, "optimal_threshold": optimal_threshold},
-    )
+        update_champion_run_metrics(
+            tuning_summary["champion_run_id"],
+            {**metrics, "optimal_threshold": optimal_threshold},
+        )
 
-    passes_threshold = bool(metrics["test_auc"] >= args.auc_threshold)
-    registered_version = (
-        register_champion(tuning_summary["champion_run_id"])
-        if passes_threshold
-        else None
-    )
+        passes_threshold = bool(metrics["test_auc"] >= args.auc_threshold)
+        registered_version = (
+            register_champion(tuning_summary["champion_run_id"])
+            if passes_threshold
+            else None
+        )
 
-    logger.info(
-        f"AUC {metrics['test_auc']:.4f} >= threshold {args.auc_threshold}: {passes_threshold}"
-    )
+        logger.info(
+            f"AUC {metrics['test_auc']:.4f} >= threshold {args.auc_threshold}: {passes_threshold}"
+        )
 
-    save_report(
-        report={
-            "champion_name": tuning_summary["champion_name"],
-            "champion_run_id": tuning_summary["champion_run_id"],
-            "val_auc": tuning_summary["val_auc"],
-            "test_auc": metrics["test_auc"],
-            "test_ks": metrics["test_ks"],
-            "test_gini": metrics["test_gini"],
-            "test_pr_auc": metrics["test_pr_auc"],
-            "optimal_threshold": optimal_threshold,
-            "auc_threshold": args.auc_threshold,
-            "passes_threshold": passes_threshold,
-            "registered_version": registered_version,
-        },
-        output_path=OUTPUT_PATH,
-    )
+        save_report(
+            report={
+                "champion_name": tuning_summary["champion_name"],
+                "champion_run_id": tuning_summary["champion_run_id"],
+                "val_auc": tuning_summary["val_auc"],
+                "test_auc": metrics["test_auc"],
+                "test_ks": metrics["test_ks"],
+                "test_gini": metrics["test_gini"],
+                "test_pr_auc": metrics["test_pr_auc"],
+                "optimal_threshold": optimal_threshold,
+                "auc_threshold": args.auc_threshold,
+                "passes_threshold": passes_threshold,
+                "registered_version": registered_version,
+            },
+            output_path=OUTPUT_PATH,
+        )
 
-    logger.info("Evaluation complete.")
+        logger.info("Evaluation complete.")
+    finally:
+        otel_provider.shutdown()
 
 
 # ---------------------------------------------------------------------------

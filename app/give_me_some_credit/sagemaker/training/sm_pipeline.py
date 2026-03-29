@@ -90,6 +90,16 @@ def get_pipeline(
         "AWS_DEFAULT_REGION": aws_region,
         "AWS_ENDPOINT_URL": s3_endpoint,
         "GIT_PYTHON_REFRESH": "quiet",
+        # Open Telemetry configuration for auto-instrumentation of all steps
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://otel-collector:4317",
+        "OTEL_EXPORTER_OTLP_INSECURE": "true",  # http endpoint, no TLS
+        "OTEL_SERVICE_NAME": "sagemaker-pipeline",
+        "OTEL_RESOURCE_ATTRIBUTES": "service.namespace=mlops,project=credit-risk,service.version=1.0",
+        "OTEL_TRACES_EXPORTER": "otlp",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+        "OTEL_LOGS_EXPORTER": "otlp",
+        "OTEL_METRICS_EXPORTER": "none",
+        "OTEL_TRACES_SAMPLER": "always_on",
     }
 
     # Pipeline parameters — can be overridden at pipeline.start() time
@@ -112,13 +122,16 @@ def get_pipeline(
     step_preprocess = ProcessingStep(
         name="Preprocessing",
         processor=ScriptProcessor(
-            command=["python"],
+            command=["opentelemetry-instrument", "python"],
             image_uri=training_image,
             role=role,
             instance_count=1,
             instance_type=instance_type,
             sagemaker_session=sagemaker_session,
-            env=shared_env,
+            env={
+                **shared_env,
+                "OTEL_SERVICE_NAME": "preprocessing",
+            },
         ),
         code=get_step_path("preprocess.py"),
         job_arguments=[
@@ -183,6 +196,7 @@ def get_pipeline(
             environment={
                 **shared_env,
                 "SAGEMAKER_PROGRAM": "train_step.py",
+                "OTEL_SERVICE_NAME": "training-baseline",
             },
         ),
         inputs={
@@ -227,6 +241,7 @@ def get_pipeline(
             environment={
                 **shared_env,
                 "SAGEMAKER_PROGRAM": "tune_step.py",
+                "OTEL_SERVICE_NAME": "hyperparameter-tuning",
             },
         ),
         depends_on=[step_train],
@@ -258,13 +273,16 @@ def get_pipeline(
     step_evaluate = ProcessingStep(
         name="Evaluation",
         processor=ScriptProcessor(
-            command=["python"],
+            command=["opentelemetry-instrument", "python"],
             image_uri=training_image,
             role=role,
             instance_count=1,
             instance_type=instance_type,
             sagemaker_session=sagemaker_session,
-            env=shared_env,
+            env={
+                **shared_env,
+                "OTEL_SERVICE_NAME": "evaluation",
+            },
         ),
         code=get_step_path("evaluate.py"),
         depends_on=[step_tune],

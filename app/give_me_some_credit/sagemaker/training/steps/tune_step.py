@@ -36,14 +36,47 @@ import optuna
 import pandas as pd
 from catboost import CatBoostClassifier
 from lightgbm import LGBMClassifier
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+    OTLPLogExporter,
+)
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.resources import Resource
 from sklearn.metrics import roc_auc_score, roc_curve
 from xgboost import XGBClassifier
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger("tune_step")
+
+
+def setup_otel_logging(service_name: str):
+    """Configures OTEL logging (Loki) and Console logging (stdout)."""
+    provider = LoggerProvider(
+        resource=Resource.create({"service.name": service_name})
+    )
+    set_logger_provider(provider)
+
+    endpoint = os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"]
+
+    exporter = OTLPLogExporter(endpoint=endpoint, insecure=True)
+    provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
+    otel_handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(otel_handler)
+    root_logger.addHandler(console_handler)
+
+    return provider
+
+
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # ---------------------------------------------------------------------------
@@ -328,84 +361,89 @@ def log_tuning_run(
 # Main
 # ---------------------------------------------------------------------------
 def main(args: argparse.Namespace) -> None:
+    otel_provider = setup_otel_logging("sagemaker-pipeline-tune")
+
     logger.info(f"Args: {vars(args)}")
+    try:
+        mlflow.set_tracking_uri(args.mlflow_uri)
+        mlflow.set_experiment(args.experiment_name)
 
-    mlflow.set_tracking_uri(args.mlflow_uri)
-    mlflow.set_experiment(args.experiment_name)
+        X_train, y_train, X_val, y_val = load_data(TRAIN_PATH, VAL_PATH)
+        baseline_results = load_baseline_results(
+            args.s3_bucket, args.s3_prefix, args.s3_endpoint
+        )
 
-    X_train, y_train, X_val, y_val = load_data(TRAIN_PATH, VAL_PATH)
-    baseline_results = load_baseline_results(
-        args.s3_bucket, args.s3_prefix, args.s3_endpoint
-    )
+        tuning_results = {}
 
-    tuning_results = {}
+        for model_name in _build_param_spaces():
+            baseline_auc = baseline_results[model_name]["val_auc"]
+            logger.info(
+                f"Tuning {model_name} ({args.n_trials} trials) | baseline AUC={baseline_auc:.4f}"
+            )
 
-    for model_name in _build_param_spaces():
-        baseline_auc = baseline_results[model_name]["val_auc"]
+            study = run_study(
+                model_name,
+                args.n_trials,
+                args.random_state,
+                X_train,
+                y_train,
+                X_val,
+                y_val,
+            )
+            logger.info(
+                f"  {model_name}: {baseline_auc:.4f} => {study.best_value:.4f} "
+                f"({study.best_value - baseline_auc:+.4f})"
+            )
+
+            model, val_auc, val_ks = refit_and_evaluate(
+                model_name,
+                study.best_params,
+                args.random_state,
+                X_train,
+                y_train,
+                X_val,
+                y_val,
+            )
+            run_id = log_tuning_run(
+                model_name,
+                study.best_params,
+                baseline_auc,
+                val_auc,
+                val_ks,
+                args.n_trials,
+                model,
+            )
+            tuning_results[model_name] = {
+                "run_id": run_id,
+                "val_auc": val_auc,
+                "val_ks": val_ks,
+                "best_params": study.best_params,
+            }
+
+        champion_name, champion_meta = select_champion(tuning_results)
         logger.info(
-            f"Tuning {model_name} ({args.n_trials} trials) | baseline AUC={baseline_auc:.4f}"
+            f"Champion: {champion_name} val_auc={champion_meta['val_auc']:.4f}"
         )
 
-        study = run_study(
-            model_name,
-            args.n_trials,
-            args.random_state,
-            X_train,
-            y_train,
-            X_val,
-            y_val,
-        )
-        logger.info(
-            f"  {model_name}: {baseline_auc:.4f} => {study.best_value:.4f} "
-            f"({study.best_value - baseline_auc:+.4f})"
+        save_tuning_summary(
+            summary={
+                "champion_name": champion_name,
+                "champion_run_id": champion_meta["run_id"],
+                "val_auc": champion_meta["val_auc"],
+                "val_ks": champion_meta["val_ks"],
+                "best_params": champion_meta["best_params"],
+                "all_results": tuning_results,
+            },
+            model_dir=args.model_dir,
+            s3_bucket=args.s3_bucket,
+            s3_prefix=args.s3_prefix,
+            s3_endpoint=args.s3_endpoint,
         )
 
-        model, val_auc, val_ks = refit_and_evaluate(
-            model_name,
-            study.best_params,
-            args.random_state,
-            X_train,
-            y_train,
-            X_val,
-            y_val,
-        )
-        run_id = log_tuning_run(
-            model_name,
-            study.best_params,
-            baseline_auc,
-            val_auc,
-            val_ks,
-            args.n_trials,
-            model,
-        )
-        tuning_results[model_name] = {
-            "run_id": run_id,
-            "val_auc": val_auc,
-            "val_ks": val_ks,
-            "best_params": study.best_params,
-        }
+        logger.info("Tuning complete.")
 
-    champion_name, champion_meta = select_champion(tuning_results)
-    logger.info(
-        f"Champion: {champion_name} val_auc={champion_meta['val_auc']:.4f}"
-    )
-
-    save_tuning_summary(
-        summary={
-            "champion_name": champion_name,
-            "champion_run_id": champion_meta["run_id"],
-            "val_auc": champion_meta["val_auc"],
-            "val_ks": champion_meta["val_ks"],
-            "best_params": champion_meta["best_params"],
-            "all_results": tuning_results,
-        },
-        model_dir=args.model_dir,
-        s3_bucket=args.s3_bucket,
-        s3_prefix=args.s3_prefix,
-        s3_endpoint=args.s3_endpoint,
-    )
-
-    logger.info("Tuning complete.")
+    finally:
+        otel_provider.shutdown()
 
 
 # ---------------------------------------------------------------------------

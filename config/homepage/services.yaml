@@ -29,15 +29,15 @@
           server: my-docker
           stats: true
 
-    - LocalStack:
-        href: http://localhost:4566/health
-        description: AWS mock
-        icon: aws.png
-        widget:
-          type: docker
-          container: localstack
-          server: my-docker
-          stats: true
+    # - LocalStack:
+    #     href: http://localhost:4566/health
+    #     description: AWS mock
+    #     icon: aws.png
+    #     widget:
+    #       type: docker
+    #       container: localstack
+    #       server: my-docker
+    #       stats: true
 
 - OBSERVABILITY:
     - Prometheus:

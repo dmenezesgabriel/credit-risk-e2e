@@ -7,10 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /opt/ml/requirements.txt
 RUN pip install --no-cache-dir -r /opt/ml/requirements.txt
 
+RUN opentelemetry-bootstrap -a install
+
 # train shim: reads SAGEMAKER_PROGRAM, falls back to train.py
 RUN echo '#!/bin/bash' > /usr/local/bin/train && \
     echo 'SCRIPT="${SAGEMAKER_PROGRAM:-train.py}"' >> /usr/local/bin/train && \
-    echo 'exec python /opt/ml/code/$SCRIPT "$@"' >> /usr/local/bin/train && \
+    echo 'exec opentelemetry-instrument python /opt/ml/code/$SCRIPT "$@"' >> /usr/local/bin/train && \
     chmod +x /usr/local/bin/train
 
 

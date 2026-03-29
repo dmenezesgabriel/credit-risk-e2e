@@ -1,11 +1,18 @@
 {
-    "description": "MLOps Lab — is everything healthy right now?",
+    "description": "MLOps Lab — health at a glance across all services and pipelines",
     "editable": true,
     "graphTooltip": 1,
     "links": [
         {
             "title": "Logs",
             "url": "/d/mlops-logs",
+            "type": "link",
+            "icon": "external link",
+            "targetBlank": false
+        },
+        {
+            "title": "Pipelines",
+            "url": "/d/mlops-pipelines",
             "type": "link",
             "icon": "external link",
             "targetBlank": false
@@ -20,25 +27,35 @@
     ],
     "panels": [
         {
+            "id": 1,
+            "type": "row",
+            "title": "Health at a glance",
+            "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
                 "y": 0
-            },
-            "id": 1,
-            "title": "Health at a glance",
-            "type": "row",
-            "collapsed": false
+            }
         },
         {
+            "id": 2,
+            "type": "stat",
+            "title": "Error rate — docker services",
+            "description": "Error lines/s from Promtail-scraped Docker containers",
             "datasource": {
                 "type": "loki",
                 "uid": "${loki}"
             },
-            "description": "Error lines per second across all containers",
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 1
+            },
             "fieldConfig": {
                 "defaults": {
+                    "unit": "reqps",
                     "color": {
                         "mode": "thresholds"
                     },
@@ -58,18 +75,9 @@
                                 "value": 1
                             }
                         ]
-                    },
-                    "unit": "reqps",
-                    "mappings": []
+                    }
                 }
             },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 0,
-                "y": 1
-            },
-            "id": 2,
             "options": {
                 "colorMode": "background",
                 "graphMode": "area",
@@ -79,8 +87,7 @@
                     "calcs": [
                         "lastNotNull"
                     ]
-                },
-                "textMode": "auto"
+                }
             },
             "targets": [
                 {
@@ -92,32 +99,16 @@
                     "legendFormat": "errors/s",
                     "refId": "A"
                 }
-            ],
-            "title": "Error rate",
-            "type": "stat"
+            ]
         },
         {
+            "id": 3,
+            "type": "stat",
+            "title": "Error rate — pipelines (OTEL)",
+            "description": "Error lines/s from SageMaker pipeline steps via OTEL",
             "datasource": {
                 "type": "loki",
                 "uid": "${loki}"
-            },
-            "description": "Total log lines per second",
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "blue",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "unit": "reqps"
-                }
             },
             "gridPos": {
                 "h": 4,
@@ -125,7 +116,31 @@
                 "x": 6,
                 "y": 1
             },
-            "id": 3,
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 0.1
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    }
+                }
+            },
             "options": {
                 "colorMode": "background",
                 "graphMode": "area",
@@ -135,8 +150,7 @@
                     "calcs": [
                         "lastNotNull"
                     ]
-                },
-                "textMode": "auto"
+                }
             },
             "targets": [
                 {
@@ -144,22 +158,30 @@
                         "type": "loki",
                         "uid": "${loki}"
                     },
-                    "expr": "sum(rate({container=~\".+\"}[5m]))",
-                    "legendFormat": "lines/s",
+                    "expr": "sum(rate({service_namespace=\"mlops\"} |~ `(?i)(error|exception|critical|fatal)` [5m]))",
+                    "legendFormat": "errors/s",
                     "refId": "A"
                 }
-            ],
-            "title": "Log volume",
-            "type": "stat"
+            ]
         },
         {
+            "id": 4,
+            "type": "stat",
+            "title": "Top CPU container",
+            "description": "Docker container currently using the most CPU",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${prom}"
             },
-            "description": "Container using the most CPU right now",
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 1
+            },
             "fieldConfig": {
                 "defaults": {
+                    "unit": "percentunit",
                     "color": {
                         "mode": "thresholds"
                     },
@@ -179,17 +201,9 @@
                                 "value": 0.85
                             }
                         ]
-                    },
-                    "unit": "percentunit"
+                    }
                 }
             },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 12,
-                "y": 1
-            },
-            "id": 4,
             "options": {
                 "colorMode": "background",
                 "graphMode": "none",
@@ -198,8 +212,7 @@
                     "calcs": [
                         "lastNotNull"
                     ]
-                },
-                "textMode": "auto"
+                }
             },
             "targets": [
                 {
@@ -212,18 +225,26 @@
                     "refId": "A",
                     "instant": true
                 }
-            ],
-            "title": "Top CPU container",
-            "type": "stat"
+            ]
         },
         {
+            "id": 5,
+            "type": "stat",
+            "title": "Top memory container",
+            "description": "Docker container currently using the most memory",
             "datasource": {
                 "type": "prometheus",
                 "uid": "${prom}"
             },
-            "description": "Container using the most memory right now",
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 1
+            },
             "fieldConfig": {
                 "defaults": {
+                    "unit": "bytes",
                     "color": {
                         "mode": "thresholds"
                     },
@@ -243,17 +264,9 @@
                                 "value": 900000000
                             }
                         ]
-                    },
-                    "unit": "bytes"
+                    }
                 }
             },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 18,
-                "y": 1
-            },
-            "id": 5,
             "options": {
                 "colorMode": "background",
                 "graphMode": "none",
@@ -262,8 +275,7 @@
                     "calcs": [
                         "lastNotNull"
                     ]
-                },
-                "textMode": "auto"
+                }
             },
             "targets": [
                 {
@@ -276,29 +288,38 @@
                     "refId": "A",
                     "instant": true
                 }
-            ],
-            "title": "Top memory container",
-            "type": "stat"
+            ]
         },
         {
+            "id": 10,
+            "type": "row",
+            "title": "Error trends",
+            "collapsed": false,
             "gridPos": {
                 "h": 1,
                 "w": 24,
                 "x": 0,
                 "y": 5
-            },
-            "id": 10,
-            "title": "Error trend",
-            "type": "row",
-            "collapsed": false
+            }
         },
         {
+            "id": 11,
+            "type": "timeseries",
+            "title": "Error rate — docker services (Promtail)",
+            "description": "Errors per container scraped via Promtail from the Docker socket",
             "datasource": {
                 "type": "loki",
                 "uid": "${loki}"
             },
+            "gridPos": {
+                "h": 7,
+                "w": 12,
+                "x": 0,
+                "y": 6
+            },
             "fieldConfig": {
                 "defaults": {
+                    "unit": "short",
                     "color": {
                         "mode": "palette-classic"
                     },
@@ -306,24 +327,16 @@
                         "fillOpacity": 15,
                         "lineWidth": 1.5,
                         "showPoints": "never"
-                    },
-                    "unit": "short"
+                    }
                 }
             },
-            "gridPos": {
-                "h": 7,
-                "w": 24,
-                "x": 0,
-                "y": 6
-            },
-            "id": 11,
             "options": {
                 "legend": {
                     "calcs": [
                         "sum"
                     ],
                     "displayMode": "table",
-                    "placement": "right"
+                    "placement": "bottom"
                 },
                 "tooltip": {
                     "mode": "multi"
@@ -339,34 +352,86 @@
                     "legendFormat": "{{container}}",
                     "refId": "A"
                 }
-            ],
-            "title": "Error rate by container",
-            "type": "timeseries"
+            ]
         },
         {
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 13
-            },
-            "id": 20,
-            "title": "Recent errors",
-            "type": "row",
-            "collapsed": false
-        },
-        {
+            "id": 12,
+            "type": "timeseries",
+            "title": "Error rate — pipelines (OTEL)",
+            "description": "Errors per pipeline step sent via OTEL from SageMaker / ETL jobs",
             "datasource": {
                 "type": "loki",
                 "uid": "${loki}"
             },
             "gridPos": {
-                "h": 10,
+                "h": 7,
+                "w": 12,
+                "x": 12,
+                "y": 6
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "fillOpacity": 15,
+                        "lineWidth": 1.5,
+                        "showPoints": "never"
+                    }
+                }
+            },
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "sum"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "sum by (service_name) (rate({service_namespace=\"mlops\"} |~ `(?i)(error|exception|critical|fatal)` [2m]))",
+                    "legendFormat": "{{service_name}}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "id": 20,
+            "type": "row",
+            "title": "Recent errors — docker services",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
                 "w": 24,
+                "x": 0,
+                "y": 13
+            }
+        },
+        {
+            "id": 21,
+            "type": "logs",
+            "title": "All errors — docker services (last hour)",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 9,
+                "w": 12,
                 "x": 0,
                 "y": 14
             },
-            "id": 21,
             "options": {
                 "dedupStrategy": "none",
                 "enableLogDetails": true,
@@ -384,9 +449,40 @@
                     "expr": "{container=~\".+\"} |~ `(?i)(error|exception|critical|fatal|traceback)`",
                     "refId": "A"
                 }
-            ],
-            "title": "All errors — last hour",
-            "type": "logs"
+            ]
+        },
+        {
+            "id": 22,
+            "type": "logs",
+            "title": "All errors — pipelines / OTEL (last hour)",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 14
+            },
+            "options": {
+                "dedupStrategy": "none",
+                "enableLogDetails": true,
+                "showLabels": true,
+                "showTime": true,
+                "sortOrder": "Descending",
+                "wrapLogMessage": true
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "loki",
+                        "uid": "${loki}"
+                    },
+                    "expr": "{service_namespace=\"mlops\"} |~ `(?i)(error|exception|critical|fatal|traceback)`",
+                    "refId": "A"
+                }
+            ]
         }
     ],
     "refresh": "30s",
