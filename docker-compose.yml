@@ -536,6 +536,27 @@ services:
     labels:
       - "promtail_enabled=true"
 
+  llamacpp:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: llamacpp
+    ports:
+      - "8000:8080"
+    volumes:
+      - llama-cache:/root/.cache/llama.cpp
+    networks:
+      - mlops-lab-net
+    command: >
+      -hf LiquidAI/LFM2.5-350M-GGUF:Q4_K_M
+      -c 2048
+      -t 8
+      --host 0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   postgres_pgdata:
     name: mlops-lab-postgres-data
@@ -545,14 +566,8 @@ volumes:
     name: mlops-lab-uv-cache-data
   localstack_data:
     name: mlops-lab-localstack-data
-  grafana_data:
-    name: mlops-lab-grafana-data
-  prometheus_data:
-    name: mlops-lab-prometheus-data
-  tempo_data:
-    name: mlops-lab-tempo-data
-  loki_data:
-    name: mlops-lab-loki-data
+  llama_cache:
+    name: mlops-llama-data
 
 networks:
   mlops-lab-net:
