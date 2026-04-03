@@ -19,5 +19,8 @@
             "lineNumbers": true,
             "autoClosingBrackets": true
         }
+    },
+    "@jupyterlab/extensionmanager-extension:plugin": {
+        "disclaimerAccepted": false
     }
 }

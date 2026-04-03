@@ -1,0 +1,55 @@
+{
+    "servers": {
+        "grafana": {
+            "command": "uvx",
+            "args": [
+                "mcp-grafana",
+                "--enabled-tools",
+                "search,datasource,dashboard,prometheus,loki,alerting,incident,oncall,sift,asserts,pyroscope,navigation,annotations,rendering,admin,runpanelquery,cloudwatch,searchlogs"
+            ],
+            "env": {
+                "GRAFANA_URL": "http://localhost:3001",
+                "GRAFANA_USERNAME": "admin",
+                "GRAFANA_PASSWORD": "admin"
+            }
+        },
+        "mlflow-mcp": {
+            "command": "uv",
+            "args": [
+                "run",
+                "--with",
+                "mlflow[mcp]>=3.5.1",
+                "mlflow",
+                "mcp",
+                "run"
+            ],
+            "env": {
+                "MLFLOW_TRACKING_URI": "<http://localhost:5000>"
+            }
+        },
+        "DuckDB (in-memory, r/w)": {
+            "command": "uvx",
+            "args": [
+                "mcp-server-motherduck",
+                "--db-path",
+                ":memory:",
+                "--read-write",
+                "--allow-switch-databases"
+            ]
+        },
+        "playwright": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@microsoft/mcp-server-playwright"
+            ]
+        },
+        "chrome-devtools": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "chrome-devtools-mcp@latest"
+            ]
+        }
+    }
+}

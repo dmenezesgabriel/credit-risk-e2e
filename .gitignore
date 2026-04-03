@@ -218,3 +218,5 @@ __marimo__/
 .Trash-0
 
 catboost_info/
+
+*.chat

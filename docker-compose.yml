@@ -542,7 +542,7 @@ services:
     ports:
       - "8000:8080"
     volumes:
-      - llama-cache:/root/.cache/llama.cpp
+      - llama_cache:/root/.cache/llama.cpp
     networks:
       - mlops-lab-net
     command: >
@@ -566,8 +566,16 @@ volumes:
     name: mlops-lab-uv-cache-data
   localstack_data:
     name: mlops-lab-localstack-data
+  grafana_data:
+    name: mlops-lab-grafana-data
+  tempo_data:
+    name: mlops-lab-tempo-data
+  loki_data:
+    name: mlops-lab-loki-data
+  prometheus_data:
+    name: mlops-lab-prometheus-data
   llama_cache:
-    name: mlops-llama-data
+    name: mlops-lab-llamacpp-cache-data
 
 networks:
   mlops-lab-net:
