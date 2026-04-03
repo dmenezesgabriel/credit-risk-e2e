@@ -16,6 +16,7 @@ x-airflow-env: &airflow-env
   AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
   AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
+  AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
   PYTHONWARNINGS: "ignore::SyntaxWarning"
 
 x-airflow-volumes: &airflow-volumes
