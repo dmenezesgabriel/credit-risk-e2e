@@ -1,15 +1,39 @@
 # type: ignore
+"""
+gold_feature_engineering.py — Glue/Spark job: engineer features from silver.
+
+Usage:
+    spark-submit gold_feature_engineering.py <execution_date> [dataset_type]
+
+Arguments:
+    execution_date  Airflow logical date ({{ ds }})
+    dataset_type    "training" | "inference"  (default: training)
+
+S3 layout:
+    training  → reads  silver/credit_risk/cleaned/ingestion_date={date}/
+                writes gold/credit_risk/features/
+    inference → reads  silver/credit_risk/inference/ingestion_date={date}/
+                writes gold/credit_risk/inference_features/
+
+Inference differences:
+    - Excludes target column (serious_dlqin2yrs) — not available
+    - Adds row_id column for joining predictions back to original rows
+    - Skips training-specific row-count quality gate
+"""
+
 import logging
 import sys
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, lit, when
+from pyspark.sql.functions import col, lit, monotonically_increasing_id, when
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("gold_feature_engineering")
+
+VALID_DATASET_TYPES = {"training", "inference"}
 
 spark = SparkSession.builder.appName("gold_feature_engineering").getOrCreate()
 
@@ -19,9 +43,29 @@ except IndexError:
     logger.error("Missing execution_date argument.")
     sys.exit(1)
 
+DATASET_TYPE = sys.argv[2] if len(sys.argv) > 2 else "training"
+
+if DATASET_TYPE not in VALID_DATASET_TYPES:
+    logger.error(
+        f"Invalid dataset_type '{DATASET_TYPE}'. Must be one of {VALID_DATASET_TYPES}."
+    )
+    sys.exit(1)
+
 BUCKET = "data-lake"
-silver_path = f"s3a://{BUCKET}/silver/credit_risk/cleaned/ingestion_date={execution_date}/"
-gold_path = f"s3a://{BUCKET}/gold/credit_risk/features/"
+
+PATH_CONFIG = {
+    "training": {
+        "silver": "silver/credit_risk/cleaned/ingestion_date={date}/",
+        "gold": "gold/credit_risk/features/",
+    },
+    "inference": {
+        "silver": "silver/credit_risk/inference/ingestion_date={date}/",
+        "gold": "gold/credit_risk/inference_features/",
+    },
+}
+paths = PATH_CONFIG[DATASET_TYPE]
+silver_path = f"s3a://{BUCKET}/{paths['silver'].format(date=execution_date)}"
+gold_path = f"s3a://{BUCKET}/{paths['gold']}"
 
 # EDA decisions — documented in notebooks/01_eda.ipynb
 REVOLVING_CAP = (
@@ -124,9 +168,8 @@ try:
     )
 
     # Step 5 — Select final feature set
-    GOLD_COLUMNS = [
-        # target
-        "serious_dlqin2yrs",
+    # Shared features used by both training and inference
+    FEATURE_COLUMNS = [
         # original features (capped)
         "revolving_utilization_of_unsecured_lines",
         "age",
@@ -148,27 +191,36 @@ try:
         "has_any_delinquency",
     ]
 
-    df = df.select(*GOLD_COLUMNS)
+    # Inference: row_id for joining predictions back; Training: target column
+    LEADING_COLUMNS = {
+        "training": ["serious_dlqin2yrs"],
+        "inference": ["row_id"],
+    }
+    if DATASET_TYPE == "inference":
+        df = df.withColumn("row_id", monotonically_increasing_id())
+    gold_columns = LEADING_COLUMNS[DATASET_TYPE] + FEATURE_COLUMNS
 
-    # Step 6 — Quality gate
+    df = df.select(*gold_columns)
+
+    # Step 6 — Quality gate (training only — inference set size varies)
     row_count = df.count()
-    if row_count < 100_000:
+    if DATASET_TYPE == "training" and row_count < 100_000:
         raise ValueError(
             f"Gold row count too low: {row_count}. Pipeline aborted."
         )
 
     logger.info(f"Gold rows to write: {row_count}")
-    logger.info(f"Features: {len(GOLD_COLUMNS) - 1} (excl. target)")
+    logger.info(
+        f"Features: {len(FEATURE_COLUMNS)} | dataset_type={DATASET_TYPE}"
+    )
 
     # Step 7 — Write partitioned parquet
-    # Training pipeline reads directly from this path — no feature store needed
-    # for batch training on a static dataset without entity keys or timestamps.
     df.withColumn("ingestion_date", lit(execution_date)).write.mode(
         "overwrite"
     ).partitionBy("ingestion_date").parquet(gold_path)
 
     logger.info(
-        f"Gold write OK — {row_count} rows → s3://{BUCKET}/gold/credit_risk/features/"
+        f"Gold write OK — {row_count} rows → s3://{BUCKET}/{gold_path.split(BUCKET + '/')[1]}"
     )
 
 except Exception:

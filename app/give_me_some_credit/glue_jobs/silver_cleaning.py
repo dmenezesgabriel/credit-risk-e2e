@@ -1,4 +1,22 @@
 # type: ignore
+"""
+silver_cleaning.py — Glue/Spark job: rename, type-cast, dedupe bronze CSV.
+
+Usage:
+    spark-submit silver_cleaning.py <execution_date> [file_name] [dataset_type]
+
+Arguments:
+    execution_date  Airflow logical date ({{ ds }})
+    file_name       CSV filename in bronze           (default: cs-training.csv)
+    dataset_type    "training" | "inference"          (default: training)
+
+S3 layout:
+    training  → reads  bronze/.../cs-training.csv
+                writes silver/credit_risk/cleaned/
+    inference → reads  bronze/.../{date}/inference/cs-test.csv
+                writes silver/credit_risk/inference/
+"""
+
 import logging
 import sys
 
@@ -12,6 +30,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("silver_cleaning")
 
+VALID_DATASET_TYPES = {"training", "inference"}
+
 spark = SparkSession.builder.appName("silver_cleaning").getOrCreate()
 
 try:
@@ -20,12 +40,31 @@ except IndexError:
     logger.error("Missing execution_date argument.")
     sys.exit(1)
 
+FILE_NAME = sys.argv[2] if len(sys.argv) > 2 else "cs-training.csv"
+DATASET_TYPE = sys.argv[3] if len(sys.argv) > 3 else "training"
+
+if DATASET_TYPE not in VALID_DATASET_TYPES:
+    logger.error(
+        f"Invalid dataset_type '{DATASET_TYPE}'. Must be one of {VALID_DATASET_TYPES}."
+    )
+    sys.exit(1)
+
 BUCKET = "data-lake"
-FILE_NAME = "cs-training.csv"
-bronze_path = (
-    f"s3a://{BUCKET}/bronze/credit_risk/kaggle/{execution_date}/{FILE_NAME}"
-)
-silver_path = f"s3a://{BUCKET}/silver/credit_risk/cleaned/"
+
+# Paths mirror the bronze layout produced by bronze_ingestion.py
+PATH_CONFIG = {
+    "training": {
+        "bronze": "bronze/credit_risk/kaggle/{date}/{file}",
+        "silver": "silver/credit_risk/cleaned/",
+    },
+    "inference": {
+        "bronze": "bronze/credit_risk/kaggle/{date}/inference/{file}",
+        "silver": "silver/credit_risk/inference/",
+    },
+}
+paths = PATH_CONFIG[DATASET_TYPE]
+bronze_path = f"s3a://{BUCKET}/{paths['bronze'].format(date=execution_date, file=FILE_NAME)}"
+silver_path = f"s3a://{BUCKET}/{paths['silver']}"
 
 RENAME_MAP = {
     "_c0": "index_to_drop",
@@ -77,14 +116,20 @@ try:
                 f"Expected column '{col_name}' not found — skipping cast."
             )
 
-    if "serious_dlqin2yrs" not in df.columns:
-        raise ValueError(
-            "Target column 'serious_dlqin2yrs' missing after rename."
-        )
-
     row_count = df.count()
-    if row_count < 100_000:
-        raise ValueError(f"Row count too low after cleaning: {row_count}")
+
+    if DATASET_TYPE == "training":
+        if "serious_dlqin2yrs" not in df.columns:
+            raise ValueError(
+                "Target column 'serious_dlqin2yrs' missing after rename."
+            )
+        if row_count < 100_000:
+            raise ValueError(f"Row count too low after cleaning: {row_count}")
+
+    # Inference data (cs-test.csv) has ~100K rows with NaN target — drop
+    # the target column entirely so downstream gold layer is consistent.
+    if DATASET_TYPE == "inference" and "serious_dlqin2yrs" in df.columns:
+        df = df.drop("serious_dlqin2yrs")
 
     df = df.withColumn("ingestion_date", lit(execution_date))
 

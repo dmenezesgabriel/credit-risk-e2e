@@ -538,6 +538,7 @@ services:
       - "promtail_enabled=true"
 
   llamacpp:
+    <<: *resources-xlarge
     image: ghcr.io/ggml-org/llama.cpp:server
     container_name: llamacpp
     ports:
@@ -548,7 +549,7 @@ services:
       - mlops-lab-net
     command: >
       -hf LiquidAI/LFM2.5-350M-GGUF:Q4_K_M
-      -c 2048
+      -c 4096
       -t 8
       --host 0.0.0.0
     healthcheck:
