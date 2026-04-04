@@ -3,7 +3,15 @@ name: airflow
 description: Use when need to interact with, debug, or gather information from Airflow and its DAG executions
 ---
 
-Airflow runs locally via Docker Compose with **Airflow 3.x** (LocalExecutor, PostgreSQL backend). All commands are executed via `docker exec` against the `airflow-webserver` or `airflow-scheduler` containers.
+Airflow runs locally via Docker Compose with **Airflow 3.x** (LocalExecutor, PostgreSQL backend).
+
+**Prefer running the CLI outside the container** using `uv run` pointed at the shared PostgreSQL database:
+
+```sh
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost:5432/airflow uv run --with "apache-airflow[postgres]" airflow <command>
+```
+
+This works for all DB-backed commands (`dags list`, `dags trigger`, `dags reserialize`, etc.). For commands that read container-local state (e.g. `config get-value`, container logs, task log files), use `docker exec` instead.
 
 ## Key Airflow 3.x differences
 
@@ -14,25 +22,27 @@ Airflow runs locally via Docker Compose with **Airflow 3.x** (LocalExecutor, Pos
 
 ## CLI commands
 
+Commands can be run either outside the container (preferred) or via `docker exec`.
+
 - **List DAGs**:
 
 ```sh
-docker exec airflow-webserver airflow dags list
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost:5432/airflow uv run --with "apache-airflow[postgres]" airflow dags list
 ```
 
 - **Trigger a DAG**:
 
 ```sh
-docker exec airflow-webserver airflow dags trigger <dag_id>
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost:5432/airflow uv run --with "apache-airflow[postgres]" airflow dags trigger <dag_id>
 ```
 
 - **Reserialize DAGs** (force reload after editing DAG files):
 
 ```sh
-docker exec airflow-webserver airflow dags reserialize
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost:5432/airflow uv run --with "apache-airflow[postgres]" airflow dags reserialize
 ```
 
-- **Check a config value**:
+- **Check a config value** (must use `docker exec` — reads container-local config):
 
 ```sh
 docker exec airflow-webserver airflow config get-value <section> <key>
