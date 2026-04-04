@@ -38,6 +38,9 @@ access_control:
   default_policy: one_factor
 
 # --- OIDC Provider (for Airflow & Portainer SSO) ---
+# Client secrets below must match their counterparts in:
+#   - config/airflow/webserver_config.py  (OAUTH_PROVIDERS client_secret)
+#   - scripts/setup_portainer_oauth.sh    (OAUTH_PAYLOAD ClientSecret)
 identity_providers:
   oidc:
     hmac_secret: "a-local-dev-hmac-secret-for-oidc-jwt-signing-min-32-chars"
@@ -58,6 +61,8 @@ identity_providers:
         client_secret: "$plaintext$airflow-secret"
         authorization_policy: "one_factor"
         consent_mode: "implicit"
+        # HTTP, not HTTPS: Airflow sits behind Caddy TLS termination and
+        # generates this callback URL from its own scheme (http).
         redirect_uris:
           - "http://airflow.app.localhost/auth/oauth-authorized/authelia"
         scopes:

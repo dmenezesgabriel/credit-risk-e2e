@@ -32,10 +32,7 @@ generate-oidc-key: ## Generate RSA key for Authelia OIDC (run once)
 
 setup-sso: generate-oidc-key ## Full SSO setup: generate key + start services
 	$(COMPOSE) build airflow-webserver
-	$(COMPOSE) up -d authelia caddy portainer airflow-webserver grafana homepage
-	@echo "Waiting for services to become healthy..."
-	@sleep 15
-	$(COMPOSE) up -d portainer-init
+	$(COMPOSE) up -d authelia caddy portainer portainer-init airflow-webserver grafana homepage
 	@echo ""
 	@echo "SSO setup complete! Access URLs:"
 	@echo "  Auth:      https://auth.app.localhost"

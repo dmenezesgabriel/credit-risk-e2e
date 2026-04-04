@@ -44,6 +44,7 @@ OAUTH_PROVIDERS = [
         "token_key": "access_token",
         "remote_app": {
             "client_id": "airflow",
+            # Must match config/authelia/configuration.yml → clients[airflow].client_secret
             "client_secret": "airflow-secret",
             # Do NOT use server_metadata_url: the internal URL returns
             # issuer=http://authelia:9091 but the ID-token iss claim is

@@ -57,6 +57,7 @@ echo "Configuring Portainer OAuth with Authelia OIDC..."
 
 # Uses internal Authelia URL for server-to-server calls (token, userinfo)
 # and external URL for browser redirects (authorization, logout)
+# ClientSecret must match config/authelia/configuration.yml → clients[portainer].client_secret
 OAUTH_PAYLOAD=$(cat <<EOF
 {
     "AuthenticationMethod": 3,

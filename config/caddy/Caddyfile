@@ -1,3 +1,13 @@
+# --- Shared SSO snippet ---
+# Validates every request against Authelia and forwards identity headers.
+# Headers are consumed by Grafana (auth.proxy) and available to all backends.
+(authelia) {
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+}
+
 # Authelia portal — no forward_auth here (would loop)
 auth.app.localhost {
 	tls internal
@@ -7,39 +17,27 @@ auth.app.localhost {
 # Homepage dashboard — SSO gated
 home.app.localhost {
 	tls internal
-	forward_auth authelia:9091 {
-		uri /api/authz/forward-auth
-		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
-	}
+	import authelia
 	reverse_proxy homepage:3000
 }
 
 # Grafana — deep SSO via auth.proxy headers
 grafana.app.localhost {
 	tls internal
-	forward_auth authelia:9091 {
-		uri /api/authz/forward-auth
-		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
-	}
+	import authelia
 	reverse_proxy grafana:3000
 }
 
-# Airflow — proxy-level gate, keeps internal auth
+# Airflow — SSO gated + internal OIDC auth
 airflow.app.localhost {
 	tls internal
-	forward_auth authelia:9091 {
-		uri /api/authz/forward-auth
-		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
-	}
+	import authelia
 	reverse_proxy airflow-webserver:8080
 }
 
-# Portainer — proxy-level gate, keeps internal auth
+# Portainer — SSO gated + internal OAuth auth
 portainer.app.localhost {
 	tls internal
-	forward_auth authelia:9091 {
-		uri /api/authz/forward-auth
-		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
-	}
+	import authelia
 	reverse_proxy portainer:9000
 }
