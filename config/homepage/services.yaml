@@ -20,7 +20,7 @@
           stats: true
 
     - Airflow:
-        href: http://localhost:8080
+        href: https://airflow.app.localhost
         description: Pipeline orchestration
         icon: apache-airflow.png
         widget:
@@ -51,7 +51,7 @@
           stats: true
 
     - Grafana:
-        href: http://localhost:3001
+        href: https://grafana.app.localhost
         description: Dashboards & visualization
         icon: si-grafana
         widget:
@@ -82,11 +82,21 @@
           stats: true
 
     - Portainer:
-        href: http://localhost:9000
+        href: https://portainer.app.localhost
         description: Container manager
         icon: portainer.png
         widget:
           type: docker
           container: portainer
+          server: my-docker
+          stats: true
+
+    - Authelia:
+        href: https://auth.app.localhost
+        description: SSO Portal
+        icon: authelia.png
+        widget:
+          type: docker
+          container: authelia
           server: my-docker
           stats: true

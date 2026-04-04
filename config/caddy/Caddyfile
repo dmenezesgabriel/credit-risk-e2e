@@ -1,0 +1,45 @@
+# Authelia portal — no forward_auth here (would loop)
+auth.app.localhost {
+	tls internal
+	reverse_proxy authelia:9091
+}
+
+# Homepage dashboard — SSO gated
+home.app.localhost {
+	tls internal
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+	reverse_proxy homepage:3000
+}
+
+# Grafana — deep SSO via auth.proxy headers
+grafana.app.localhost {
+	tls internal
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+	reverse_proxy grafana:3000
+}
+
+# Airflow — proxy-level gate, keeps internal auth
+airflow.app.localhost {
+	tls internal
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+	reverse_proxy airflow-webserver:8080
+}
+
+# Portainer — proxy-level gate, keeps internal auth
+portainer.app.localhost {
+	tls internal
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+	reverse_proxy portainer:9000
+}

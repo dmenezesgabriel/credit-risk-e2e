@@ -2,4 +2,6 @@ FROM apache/airflow:slim-3.1.8-python3.11
 
 RUN pip install --no-cache-dir \
     apache-airflow-providers-postgres==6.6.2 \
-    apache-airflow-providers-docker==3.14.0
+    apache-airflow-providers-docker==3.14.0 \
+    apache-airflow-providers-fab \
+    authlib

@@ -36,14 +36,14 @@
                 "AWS_ENDPOINT_URL": "http://localstack:4566",
                 "S3_MAX_BUCKETS": "5"
             }
-        }
-        // "playwright": {
-        //     "command": "npx",
-        //     "args": [
-        //         "-y",
-        //         "@microsoft/mcp-server-playwright"
-        //     ]
-        // },
+        },
+        "playwright": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@playwright/mcp@latest"
+            ]
+        },
         // "chrome-devtools": {
         //     "command": "npx",
         //     "args": [

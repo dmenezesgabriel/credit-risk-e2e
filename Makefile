@@ -26,3 +26,20 @@ up-%:
 
 down-%:
 	$(COMPOSE) down $(*)
+
+generate-oidc-key: ## Generate RSA key for Authelia OIDC (run once)
+	@bash scripts/generate_oidc_key.sh
+
+setup-sso: generate-oidc-key ## Full SSO setup: generate key + start services
+	$(COMPOSE) build airflow-webserver
+	$(COMPOSE) up -d authelia caddy portainer airflow-webserver grafana homepage
+	@echo "Waiting for services to become healthy..."
+	@sleep 15
+	$(COMPOSE) up -d portainer-init
+	@echo ""
+	@echo "SSO setup complete! Access URLs:"
+	@echo "  Auth:      https://auth.app.localhost"
+	@echo "  Grafana:   https://grafana.app.localhost"
+	@echo "  Airflow:   https://airflow.app.localhost"
+	@echo "  Portainer: https://portainer.app.localhost"
+	@echo "  Homepage:  https://home.app.localhost"

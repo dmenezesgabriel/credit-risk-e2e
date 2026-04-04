@@ -281,14 +281,22 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
-    ports:
-      - "8080:8080"
+    # Port removed — access via http://airflow.localhost through Caddy/Authelia SSO
+    expose:
+      - "8080"
     environment:
       <<: [*aws-env, *airflow-env, *container-env]
       AIRFLOW__API_SERVER__WORKERS: 1
       AIRFLOW__API_SERVER__WEB_SERVER_MASTER_TIMEOUT: 300
-      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/passwords.json
-    volumes: *airflow-volumes
+      # SSO: FAB Auth Manager with Authelia OIDC
+      AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "True"
+    volumes:
+      - ./app/airflow/dags:/opt/airflow/dags
+      - ./app:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/airflow/webserver_config.py:/opt/airflow/webserver_config.py:ro
+      - airflow_logs:/opt/airflow/logs
     command: api-server
     networks:
       - mlops-lab-net
@@ -351,8 +359,9 @@ services:
     # 1. docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'superpassword' | cut -d ":" -f 2
     # 2. You need to escape each $ character inside the hashed password with another $
     command: --admin-password '$$2y$$05$$v1jZdrzA6cdaii29.kpMsu1tFC9OHDDF8rj9LeSNRPGeHUcT.WOS.' # superpassword
-    ports:
-      - "9000:9000"
+    # Port removed — access via http://portainer.localhost through Caddy/Authelia SSO
+    expose:
+      - "9000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -425,13 +434,21 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
-    ports:
-      - "3001:3000"
+    # Port removed — access via http://grafana.localhost through Caddy/Authelia SSO
+    expose:
+      - "3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ENABLE_GZIP: "true"
+      # SSO via Authelia auth.proxy — Caddy forwards Remote-User header after Authelia validation
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: Remote-User
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
+      GF_AUTH_PROXY_HEADERS: "Name:Remote-Name Email:Remote-Email"
+      GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN: "false"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./config/grafana/grafana_datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
@@ -549,6 +566,71 @@ services:
     labels:
       - "promtail_enabled=true"
 
+  # ---- SSO Infrastructure ----
+
+  authelia:
+    <<: *resources-small
+    image: authelia/authelia:4
+    container_name: authelia
+    environment:
+      X_AUTHELIA_CONFIG_FILTERS: template
+    volumes:
+      - ./config/authelia:/config:ro
+      - authelia_data:/data
+    networks:
+      - mlops-lab-net
+    expose:
+      - "9091"
+    healthcheck:
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:9091/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "promtail_enabled=true"
+
+  caddy:
+    <<: *resources-small
+    image: caddy:2-alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks:
+      - mlops-lab-net
+    depends_on:
+      authelia:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "promtail_enabled=true"
+
+  portainer-init:
+    <<: *resources-micro
+    image: alpine:3.22
+    container_name: portainer-init
+    depends_on:
+      portainer:
+        condition: service_healthy
+      authelia:
+        condition: service_healthy
+    volumes:
+      - ./scripts/setup_portainer_oauth.sh:/setup.sh:ro
+    entrypoint: ["sh", "/setup.sh"]
+    networks:
+      - mlops-lab-net
+    restart: "no"
+
   llamacpp:
     <<: *resources-xlarge
     image: ghcr.io/ggml-org/llama.cpp:server
@@ -592,6 +674,10 @@ volumes:
     name: mlops-lab-airflow-logs
   llama_cache:
     name: mlops-lab-llamacpp-cache-data
+  authelia_data:
+    name: mlops-lab-authelia-data
+  caddy_data:
+    name: mlops-lab-caddy-data
 
 networks:
   mlops-lab-net:
