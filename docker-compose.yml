@@ -290,7 +290,6 @@ services:
       AIRFLOW__API_SERVER__WEB_SERVER_MASTER_TIMEOUT: 300
       # SSO: FAB Auth Manager with Authelia OIDC
       AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "True"
     volumes:
       - ./app/airflow/dags:/opt/airflow/dags
       - ./app:/workspace
@@ -570,7 +569,7 @@ services:
 
   authelia:
     <<: *resources-small
-    image: authelia/authelia:4
+    image: authelia/authelia:4.39
     container_name: authelia
     environment:
       X_AUTHELIA_CONFIG_FILTERS: template
@@ -593,7 +592,7 @@ services:
 
   caddy:
     <<: *resources-small
-    image: caddy:2-alpine
+    image: caddy:2.11-alpine
     container_name: caddy
     ports:
       - "80:80"
@@ -617,7 +616,7 @@ services:
 
   portainer-init:
     <<: *resources-micro
-    image: alpine:3.22
+    image: curlimages/curl:8.14.1
     container_name: portainer-init
     depends_on:
       portainer:

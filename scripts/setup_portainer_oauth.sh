@@ -4,9 +4,6 @@
 
 set -eu
 
-# Install curl (BusyBox wget doesn't support PUT method needed by Portainer API)
-apk add --no-cache curl >/dev/null 2>&1
-
 PORTAINER_URL="${PORTAINER_URL:-http://portainer:9000}"
 ADMIN_USER="${PORTAINER_ADMIN_USER:-admin}"
 ADMIN_PASS="${PORTAINER_ADMIN_PASS:-superpassword}"

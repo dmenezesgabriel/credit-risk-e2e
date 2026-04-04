@@ -6,7 +6,7 @@ Docs: https://airflow.apache.org/docs/apache-airflow-providers-fab/stable/auth-m
 
 import logging
 import os
-from typing import Any, Union
+from typing import Any
 
 from airflow.providers.fab.auth_manager.security_manager.override import (
     FabAirflowSecurityManagerOverride,
@@ -53,7 +53,6 @@ OAUTH_PROVIDERS = [
             "authorize_url": f"{_AUTHELIA_EXTERNAL}/api/oidc/authorization",
             "jwks_uri": f"{_AUTHELIA_INTERNAL}/jwks.json",
             "userinfo_endpoint": f"{_AUTHELIA_INTERNAL}/api/oidc/userinfo",
-            "request_token_url": None,
             "client_kwargs": {
                 "scope": "openid profile email groups",
             },
@@ -66,7 +65,7 @@ OAUTH_PROVIDERS = [
 class AutheliaSecurityManager(FabAirflowSecurityManagerOverride):
     def get_oauth_user_info(
         self, provider: str, resp: Any
-    ) -> dict[str, Union[str, list[str]]]:
+    ) -> dict[str, str | list[str]]:
         if provider != "authelia":
             return {}
 
