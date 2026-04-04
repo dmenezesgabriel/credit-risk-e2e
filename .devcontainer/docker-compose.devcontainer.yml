@@ -2,7 +2,7 @@ services:
   devcontainer:
     image: mcr.microsoft.com/devcontainers/base:debian-12
     volumes:
-      - ..:/workspace:cached
+      - .:/workspace:cached
       - /var/run/docker.sock:/var/run/docker.sock
     command: sleep infinity
     networks:
