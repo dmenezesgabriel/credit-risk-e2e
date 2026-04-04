@@ -27,7 +27,7 @@
                 "MLFLOW_TRACKING_URI": "<http://localhost:5000>"
             }
         },
-        "DuckDB (in-memory, r/w)": {
+        "duckdb": {
             "command": "uvx",
             "args": [
                 "mcp-server-motherduck",
@@ -37,19 +37,19 @@
                 "--allow-switch-databases"
             ]
         },
-        "playwright": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "@microsoft/mcp-server-playwright"
-            ]
-        },
-        "chrome-devtools": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "chrome-devtools-mcp@latest"
-            ]
-        }
+        // "playwright": {
+        //     "command": "npx",
+        //     "args": [
+        //         "-y",
+        //         "@microsoft/mcp-server-playwright"
+        //     ]
+        // },
+        // "chrome-devtools": {
+        //     "command": "npx",
+        //     "args": [
+        //         "-y",
+        //         "chrome-devtools-mcp@latest"
+        //     ]
+        // }
     }
 }

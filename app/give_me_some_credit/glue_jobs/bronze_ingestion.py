@@ -9,10 +9,6 @@ Arguments:
     execution_date  Airflow logical date ({{ ds }})
     file_name       CSV inside the Kaggle zip   (default: cs-training.csv)
     dataset_type    "training" | "inference"     (default: training)
-
-S3 layout:
-    training  → bronze/credit_risk/kaggle/{date}/{file_name}
-    inference → bronze/credit_risk/kaggle/{date}/inference/{file_name}
 """
 
 import logging
@@ -54,8 +50,8 @@ BUCKET = "data-lake"
 # Training keeps original path for backward compatibility;
 # inference gets its own sub-directory.
 BRONZE_KEY_TEMPLATES = {
-    "training": "bronze/credit_risk/kaggle/{date}/{file}",
-    "inference": "bronze/credit_risk/kaggle/{date}/inference/{file}",
+    "training": "bronze/give_me_some_credit/{date}/train/{file}",
+    "inference": "bronze/give_me_some_credit/{date}/test/{file}",
 }
 key = BRONZE_KEY_TEMPLATES[DATASET_TYPE].format(
     date=execution_date, file=FILE_NAME

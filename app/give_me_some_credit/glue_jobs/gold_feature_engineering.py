@@ -9,12 +9,6 @@ Arguments:
     execution_date  Airflow logical date ({{ ds }})
     dataset_type    "training" | "inference"  (default: training)
 
-S3 layout:
-    training  → reads  silver/credit_risk/cleaned/ingestion_date={date}/
-                writes gold/credit_risk/features/
-    inference → reads  silver/credit_risk/inference/ingestion_date={date}/
-                writes gold/credit_risk/inference_features/
-
 Inference differences:
     - Excludes target column (serious_dlqin2yrs) — not available
     - Adds row_id column for joining predictions back to original rows
@@ -55,12 +49,12 @@ BUCKET = "data-lake"
 
 PATH_CONFIG = {
     "training": {
-        "silver": "silver/credit_risk/cleaned/ingestion_date={date}/",
-        "gold": "gold/credit_risk/features/",
+        "silver": "silver/give_me_some_credit/{date}/train/cleaned/ingestion_date={date}/",
+        "gold": "gold/give_me_some_credit/train_features/",
     },
     "inference": {
-        "silver": "silver/credit_risk/inference/ingestion_date={date}/",
-        "gold": "gold/credit_risk/inference_features/",
+        "silver": "silver/give_me_some_credit/{date}/test/cleaned/ingestion_date={date}/",
+        "gold": "gold/give_me_some_credit/test_features/",
     },
 }
 paths = PATH_CONFIG[DATASET_TYPE]

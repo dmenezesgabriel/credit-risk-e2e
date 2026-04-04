@@ -15,9 +15,9 @@ Note: HyperparameterTuner is a managed AWS service unavailable in local mode.
 Run locally:
     python tune_step.py \
         --mlflow-uri http://localhost:5000 \
-        --experiment-name credit_risk_pipeline \
+        --experiment-name give_me_some_credit \
         --s3-bucket data-lake \
-        --s3-prefix projects/credit_risk_pipeline/sagemaker/pipeline \
+        --s3-prefix projects/give_me_some_credit/sagemaker/pipeline \
         --s3-endpoint http://localstack:4566 \
         --n-trials 10 \
         --random-state 42
@@ -454,11 +454,11 @@ def parse_args() -> argparse.Namespace:
         description="Credit risk hyperparameter tuning step"
     )
     parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
-    parser.add_argument("--experiment-name", default="credit_risk_pipeline")
+    parser.add_argument("--experiment-name", default="give_me_some_credit")
     parser.add_argument("--s3-bucket", default="data-lake")
     parser.add_argument(
         "--s3-prefix",
-        default="projects/credit_risk_pipeline/sagemaker/pipeline",
+        default="projects/give_me_some_credit/sagemaker/pipeline",
     )
     parser.add_argument("--s3-endpoint", default="http://localstack:4566")
     parser.add_argument("--n-trials", type=int, default=10)

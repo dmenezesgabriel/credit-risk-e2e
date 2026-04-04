@@ -16,7 +16,7 @@ branches: register if test_auc >= threshold, else fail.
 Run locally:
     python evaluate.py \
         --mlflow-uri http://localhost:5000 \
-        --experiment-name credit_risk_pipeline \
+        --experiment-name give_me_some_credit \
         --auc-threshold 0.85
 """
 
@@ -94,7 +94,7 @@ THRESHOLD_SEARCH_GRID = np.linspace(0.01, 0.99, 200)
 # ---------------------------------------------------------------------------
 # MLflow registry
 # ---------------------------------------------------------------------------
-REGISTRY_MODEL_NAME = "credit_risk_champion"
+REGISTRY_MODEL_NAME = "give_me_some_credit_champion"
 REGISTRY_WAIT_RETRIES = 30
 REGISTRY_WAIT_SECONDS = 2
 
@@ -302,7 +302,7 @@ def main(args: argparse.Namespace) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Credit risk evaluation step")
     parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
-    parser.add_argument("--experiment-name", default="credit_risk_pipeline")
+    parser.add_argument("--experiment-name", default="give_me_some_credit")
     parser.add_argument("--auc-threshold", type=float, default=0.85)
     return parser.parse_args()
 

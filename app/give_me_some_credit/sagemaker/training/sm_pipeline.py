@@ -79,7 +79,7 @@ def get_pipeline(
 
     pipeline_s3_prefix = f"projects/{experiment_name}/sagemaker/pipeline"
     pipeline_s3 = f"s3://{s3_bucket}/{pipeline_s3_prefix}"
-    gold_s3 = f"s3://{s3_bucket}/gold/credit_risk/features/ingestion_date={ingestion_date}"
+    gold_s3 = f"s3://{s3_bucket}/gold/give_me_some_credit/train_features/ingestion_date={ingestion_date}"
 
     # Infra/credentials vars shared across all containers.
     # Script-level config (mlflow, experiment, random state) is passed
@@ -375,7 +375,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--s3-endpoint", default="http://localstack:4566")
     parser.add_argument("--s3-bucket", default="data-lake")
     parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
-    parser.add_argument("--experiment-name", default="credit_risk_pipeline")
+    parser.add_argument("--experiment-name", default="give_me_some_credit")
     parser.add_argument("--n-trials", type=int, default=10)
     parser.add_argument("--auc-threshold", type=float, default=0.85)
     parser.add_argument(

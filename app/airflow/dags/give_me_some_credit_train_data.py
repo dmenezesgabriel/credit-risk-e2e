@@ -2,11 +2,10 @@
 """
 Airflow DAG — Inference data pipeline for credit risk.
 
-Ingests cs-test.csv through the same Bronze → Silver → Gold medallion
-pipeline used for training, producing inference-ready features at:
-    s3://data-lake/gold/credit_risk/inference_features/
+Ingests cs-train.csv through the same Bronze => Silver => Gold medallion
 
-Triggered independently from the training pipeline.
+In a real world situation, instead of using docker operator
+it would do a python script to trigger glue via aws API
 """
 
 import os
@@ -26,9 +25,6 @@ KAGGLE_KEY = os.environ.get("KAGGLE_KEY", "")
 
 NETWORK = os.environ["NETWORK"]
 PROJECT_ROOT = os.environ["PROJECT_ROOT"]
-
-FILE_NAME = "cs-test.csv"
-DATASET_TYPE = "inference"
 
 
 def glue_task(
@@ -53,7 +49,7 @@ def glue_task(
         --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
         --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
         /workspace/give_me_some_credit/glue_jobs/{script} {{{{ ds }}}} {extra_args}
-        """,
+        """,  # {{ ds }} is Airflow's logical execution date
         docker_url="unix://var/run/docker.sock",
         network_mode=NETWORK,
         mounts=[
@@ -82,29 +78,25 @@ def glue_task(
 
 
 with DAG(
-    dag_id="credit_risk_inference_pipeline",
-    description="Bronze => Silver => Gold for inference data (cs-test.csv)",
+    dag_id="give_me_some_credit_train_data",
+    description="Bronze => Silver => Gold",
     start_date=datetime(2024, 1, 1),
-    schedule_interval=None,
+    schedule_interval=None,  # triggered manually or by upstream sensor
     catchup=False,
-    tags=["credit-risk", "inference-pipeline"],
+    tags=["give-me-some-credit", "data-pipeline", "kaggle", "train-data"],
 ) as dag:
 
     t1_ingest = glue_task(
         "bronze_ingestion",
         "bronze_ingestion.py",
-        extra_args=f"{FILE_NAME} {DATASET_TYPE}",
     )
     t2_silver = glue_task(
         "silver_cleaning",
         "silver_cleaning.py",
-        extra_args=f"{FILE_NAME} {DATASET_TYPE}",
     )
-    # gold_feature_engineering.py takes (execution_date, dataset_type) — no file_name
     t3_gold = glue_task(
         "gold_feature_engineering",
         "gold_feature_engineering.py",
-        extra_args=DATASET_TYPE,
     )
 
     t1_ingest >> t2_silver >> t3_gold

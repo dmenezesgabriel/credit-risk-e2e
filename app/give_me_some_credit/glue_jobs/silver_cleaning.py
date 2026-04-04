@@ -10,11 +10,6 @@ Arguments:
     file_name       CSV filename in bronze           (default: cs-training.csv)
     dataset_type    "training" | "inference"          (default: training)
 
-S3 layout:
-    training  → reads  bronze/.../cs-training.csv
-                writes silver/credit_risk/cleaned/
-    inference → reads  bronze/.../{date}/inference/cs-test.csv
-                writes silver/credit_risk/inference/
 """
 
 import logging
@@ -51,20 +46,19 @@ if DATASET_TYPE not in VALID_DATASET_TYPES:
 
 BUCKET = "data-lake"
 
-# Paths mirror the bronze layout produced by bronze_ingestion.py
 PATH_CONFIG = {
     "training": {
-        "bronze": "bronze/credit_risk/kaggle/{date}/{file}",
-        "silver": "silver/credit_risk/cleaned/",
+        "bronze": "bronze/give_me_some_credit/{date}/train/{file}",
+        "silver": "silver/give_me_some_credit/{date}/train/cleaned/",
     },
     "inference": {
-        "bronze": "bronze/credit_risk/kaggle/{date}/inference/{file}",
-        "silver": "silver/credit_risk/inference/",
+        "bronze": "bronze/give_me_some_credit/{date}/test/{file}",
+        "silver": "silver/give_me_some_credit/{date}/test/cleaned/",
     },
 }
 paths = PATH_CONFIG[DATASET_TYPE]
 bronze_path = f"s3a://{BUCKET}/{paths['bronze'].format(date=execution_date, file=FILE_NAME)}"
-silver_path = f"s3a://{BUCKET}/{paths['silver']}"
+silver_path = f"s3a://{BUCKET}/{paths['silver'].format(date=execution_date)}"
 
 RENAME_MAP = {
     "_c0": "index_to_drop",

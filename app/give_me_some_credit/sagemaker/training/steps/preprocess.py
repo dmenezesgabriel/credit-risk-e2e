@@ -13,7 +13,7 @@ SageMaker mounts:
 Run locally:
     python preprocess.py \
         --mlflow-uri http://localhost:5000 \
-        --experiment-name credit_risk_pipeline \
+        --experiment-name give_me_some_credit \
         --random-state 42
 """
 
@@ -344,7 +344,7 @@ def parse_args() -> argparse.Namespace:
         description="Credit risk preprocessing step"
     )
     parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
-    parser.add_argument("--experiment-name", default="credit_risk_pipeline")
+    parser.add_argument("--experiment-name", default="give_me_some_credit")
     parser.add_argument("--random-state", type=int, default=42)
     return parser.parse_args()
 
