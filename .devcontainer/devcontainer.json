@@ -164,7 +164,25 @@
 				"terminal.integrated.defaultProfile.linux": "zsh",
 				"python.defaultInterpreterPath": "/usr/local/bin/python",
 				"jupyter.jupyterServerType": "remote",
-				"jupyter.serverUri": "http://jupyter:8888"
+				"jupyter.serverUri": "http://jupyter:8888",
+				"aws.dev.endpoints": {
+					"s3": "http://localstack:4566",
+					"sqs": "http://localstack:4566",
+					"sns": "http://localstack:4566",
+					"dynamodb": "http://localstack:4566",
+					"lambda": "http://localstack:4566",
+					"iam": "http://localstack:4566",
+					"cloudwatch": "http://localstack:4566",
+					"ec2": "http://localstack:4566",
+					"kinesis": "http://localstack:4566",
+					"secretsmanager": "http://localstack:4566",
+					"ssm": "http://localstack:4566",
+					"stepfunctions": "http://localstack:4566",
+					"eventbridge": "http://localstack:4566",
+					"apigateway": "http://localstack:4566",
+					"logs": "http://localstack:4566",
+					"sts": "http://localstack:4566"
+				}
 			}
 		}
 	},
