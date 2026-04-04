@@ -1,0 +1,3 @@
+# Authelia config uses Go template syntax ({{ }}) that Prettier
+# treats as nested YAML flow maps, breaking the configuration.
+config/authelia/configuration.yml

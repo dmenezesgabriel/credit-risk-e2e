@@ -29,7 +29,7 @@
 		},
 		"ghcr.io/devcontainers/features/terraform:1": {}
 	},
-	"initializeCommand": "touch .env",
+	"initializeCommand": "touch .env && bash scripts/generate_oidc_key.sh",
 	"postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh",
 	"containerEnv": {
 		"AWS_ACCESS_KEY_ID": "test",

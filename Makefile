@@ -6,7 +6,7 @@ DOCKER_GID := $(shell stat -c '%g' /var/run/docker.sock)
 DOCKER_ENV := UID=$(UID) GID=$(GID) DOCKER_GID=$(DOCKER_GID)
 COMPOSE := $(DOCKER_ENV) docker compose
 
-up:
+up: generate-oidc-key
 	$(COMPOSE) up -d
 
 down:

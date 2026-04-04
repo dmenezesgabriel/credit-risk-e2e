@@ -42,12 +42,7 @@ identity_providers:
   oidc:
     hmac_secret: "a-local-dev-hmac-secret-for-oidc-jwt-signing-min-32-chars"
     jwks:
-      - key:
-          {
-            {
-              secret "/config/secrets/oidc-jwks-rsa.pem" | mindent 10 "|" | msquote,
-            },
-          }
+      - key: {{ secret "/config/secrets/oidc-jwks-rsa.pem" | mindent 10 "|" | msquote }}
         algorithm: "RS256"
         use: "sig"
     cors:
