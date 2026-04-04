@@ -1,9 +1,11 @@
 {
 	"name": "MLOps Lab",
-	"image": "mcr.microsoft.com/devcontainers/base:debian-12",
-	"mounts": [
-		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+	"dockerComposeFile": [
+		"../docker-compose.yml",
+		"docker-compose.devcontainer.yml"
 	],
+	"service": "devcontainer",
+	"workspaceFolder": "/workspace",
 	"features": {
 		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
 			"moby": false,
@@ -22,26 +24,53 @@
 			"version": "3.11",
 			"installTools": false
 		},
-		"ghcr.io/devcontainers/features/node:1": {},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "22"
+		},
 		"ghcr.io/devcontainers/features/terraform:1": {}
 	},
-	"postStartCommand": "bash .devcontainer/post-start.sh",
+	"initializeCommand": "touch .env",
+	"postCreateCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+	"containerEnv": {
+		"AWS_ACCESS_KEY_ID": "test",
+		"AWS_SECRET_ACCESS_KEY": "test",
+		"AWS_DEFAULT_REGION": "us-east-1",
+		"AWS_ENDPOINT_URL": "http://localstack:4566",
+		"MLFLOW_TRACKING_URI": "http://mlflow:5000",
+		"MLFLOW_S3_ENDPOINT_URL": "http://localstack:4566",
+		"POSTGRES_HOST": "postgres-db",
+		"POSTGRES_PORT": "5432",
+		"POSTGRES_USER": "postgres",
+		"POSTGRES_PASSWORD": "postgres",
+		"AIRFLOW_BASE_URL": "http://airflow-webserver:8080",
+		"GRAFANA_URL": "http://grafana:3000",
+		"PROMETHEUS_URL": "http://prometheus:9090",
+		"LOKI_URL": "http://loki:3100",
+		"TEMPO_URL": "http://tempo:3200",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "http://otel-collector:4317",
+		"JUPYTER_URL": "http://jupyter:8888",
+		"LLAMACPP_URL": "http://llamacpp:8080"
+	},
+	"remoteEnv": {
+		"PATH": "${containerEnv:PATH}:/root/.local/bin"
+	},
 	"forwardPorts": [
-		3000, // homepage
-		3001, // grafana
-		3100, // loki
-		3200, // tempo HTTP API
-		4317, // OTLP gRPC
-		4318, // OTLP HTTP
-		4566, // localstack
-		5000, // mlflow
-		5432, // postgres
-		8080, // airflow webserver
-		8082, // adminer
-		8085, // cadvisor
-		8888, // jupyter
-		9000, // portainer
-		9090 // prometheus
+		3000,
+		3001,
+		3100,
+		3200,
+		4317,
+		4318,
+		4566,
+		5000,
+		5432,
+		8000,
+		8080,
+		8082,
+		8085,
+		8888,
+		9000,
+		9090
 	],
 	"portsAttributes": {
 		"3000": {
@@ -70,6 +99,10 @@
 		},
 		"5432": {
 			"label": "Postgres",
+			"onAutoForward": "silent"
+		},
+		"8000": {
+			"label": "LlamaCpp",
 			"onAutoForward": "silent"
 		},
 		"8080": {
@@ -103,28 +136,41 @@
 				"ms-python.python",
 				"ms-python.vscode-pylance",
 				"ms-toolsai.jupyter",
+				"ms-python.autopep8",
+				"ms-python.black-formatter",
+				"ms-python.isort",
+				"ms-python.mypy-type-checker",
+				"ms-python.vscode-pylance",
 				"ms-azuretools.vscode-docker",
+				"ms-python.debugpy",
+				"ms-python.vscode-python-envs",
 				"redhat.vscode-yaml",
 				"esbenp.prettier-vscode",
 				"eamodio.gitlens",
-				"charliermarsh.ruff",
-				"amazonwebservices.aws-toolkit-vscode"
+				"amazonwebservices.aws-toolkit-vscode",
+				"shardulm94.trailing-spaces",
+				"esbenp.prettier-vscode",
+				"streetsidesoftware.code-spell-checker-portuguese-brazilian",
+				"streetsidesoftware.code-spell-checker",
+				"Catppuccin.catppuccin-vsc",
+				"Catppuccin.catppuccin-vsc-icons",
+				"naumovs.color-highlight",
+				"mikestead.dotenv",
+				"tamasfe.even-better-toml",
+				"GitHub.copilot-chat",
+				"hashicorp.terraform"
 			],
 			"settings": {
 				"terminal.integrated.defaultProfile.linux": "zsh",
 				"python.defaultInterpreterPath": "/usr/local/bin/python",
-				"editor.formatOnSave": true,
-				"[python]": {
-					"editor.defaultFormatter": "charliermarsh.ruff"
-				},
 				"jupyter.jupyterServerType": "remote",
-				"jupyter.serverUri": "http://localhost:8888"
+				"jupyter.serverUri": "http://jupyter:8888"
 			}
 		}
 	},
 	"hostRequirements": {
 		"cpus": 8,
-		"memory": "16gb",
+		"memory": "8gb",
 		"storage": "32gb"
 	}
 }
