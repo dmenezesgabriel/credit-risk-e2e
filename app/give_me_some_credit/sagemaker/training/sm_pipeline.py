@@ -308,7 +308,7 @@ def get_pipeline(
                 input_name="tuning",
             ),
             ProcessingInput(
-                source=f"{pipeline_s3}/preprocessing/preprocessor/prep_meta.json",
+                source=f"{pipeline_s3}/preprocessing/preprocessor",
                 destination="/opt/ml/processing/input/prep_meta",
                 input_name="prep_meta",
             ),

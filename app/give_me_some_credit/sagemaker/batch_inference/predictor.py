@@ -18,6 +18,7 @@ import io
 import json
 import logging
 import os
+import threading
 import traceback
 
 import flask
@@ -33,67 +34,61 @@ logging.basicConfig(
 
 MODEL_DIR = "/opt/ml/model"
 
-# Gold feature schema (must match training preprocessing exactly)
-FEATURE_COLUMNS = [
-    "revolving_utilization_of_unsecured_lines",
-    "age",
-    "number_of_time30_59_days_past_due_not_worse",
-    "debt_ratio",
-    "monthly_income",
-    "number_of_open_credit_lines_and_loans",
-    "number_of_times90_days_late",
-    "number_real_estate_loans_or_lines",
-    "number_of_time60_89_days_past_due_not_worse",
-    "number_of_dependents",
-    "monthly_income_is_missing",
-    "number_of_dependents_is_missing",
-    "delinquency_score",
-    "debt_to_income_ratio",
-    "unsecured_to_total_lines_ratio",
-    "has_any_delinquency",
-    "age_risk_bucket",
-]
-
 
 class ScoringService:
-    """Lazy-loaded singleton that holds the model, preprocessor, and threshold."""
+    """Thread-safe lazy-loaded singleton for model, preprocessor, and threshold."""
 
     model = None
     preprocessor = None
     optimal_threshold = 0.5
+    feature_columns = None
+    _lock = threading.Lock()
 
     @classmethod
     def load(cls) -> bool:
         if cls.model is not None:
             return True
 
-        try:
-            cls.model = mlflow.sklearn.load_model(
-                os.path.join(MODEL_DIR, "champion")
-            )
-            cls.preprocessor = mlflow.sklearn.load_model(
-                os.path.join(MODEL_DIR, "preprocessor")
-            )
+        with cls._lock:
+            # Double-check after acquiring lock
+            if cls.model is not None:
+                return True
 
-            report_path = os.path.join(MODEL_DIR, "evaluation_report.json")
-            with open(report_path) as f:
-                report = json.load(f)
-            cls.optimal_threshold = report["optimal_threshold"]
+            try:
+                model = mlflow.sklearn.load_model(
+                    os.path.join(MODEL_DIR, "champion")
+                )
+                preprocessor = mlflow.sklearn.load_model(
+                    os.path.join(MODEL_DIR, "preprocessor")
+                )
 
-            logger.info(
-                f"Model loaded: champion={report.get('champion_name', '?')}, "
-                f"threshold={cls.optimal_threshold:.4f}"
-            )
-            return True
-        except Exception:
-            logger.error(f"Failed to load model:\n{traceback.format_exc()}")
-            cls.model = None
-            return False
+                report_path = os.path.join(MODEL_DIR, "evaluation_report.json")
+                with open(report_path) as f:
+                    report = json.load(f)
+
+                cls.optimal_threshold = report["optimal_threshold"]
+                cls.feature_columns = report["feature_columns"]
+                cls.preprocessor = preprocessor
+                # Set model last — it gates the "is loaded" check
+                cls.model = model
+
+                logger.info(
+                    f"Model loaded: champion={report.get('champion_name', '?')}, "
+                    f"threshold={cls.optimal_threshold:.4f}, "
+                    f"features={len(cls.feature_columns)}"
+                )
+                return True
+            except Exception:
+                logger.error(
+                    f"Failed to load model:\n{traceback.format_exc()}"
+                )
+                cls.model = None
+                return False
 
     @classmethod
     def predict(cls, df: pd.DataFrame) -> pd.DataFrame:
         row_ids = df["row_id"].values
-        features = df[FEATURE_COLUMNS]
+        features = df[cls.feature_columns]
 
         X = cls.preprocessor.transform(features)
         probabilities = cls.model.predict_proba(X)[:, 1]
@@ -117,6 +112,17 @@ def ping():
     status = 200 if healthy else 404
     return flask.Response(
         response="\n", status=status, mimetype="application/json"
+    )
+
+
+@app.route("/execution-parameters", methods=["GET"])
+def execution_parameters():
+    return flask.jsonify(
+        {
+            "MaxConcurrentTransforms": 1,
+            "BatchStrategy": "SINGLE_RECORD",
+            "MaxPayloadInMB": 6,
+        }
     )
 
 

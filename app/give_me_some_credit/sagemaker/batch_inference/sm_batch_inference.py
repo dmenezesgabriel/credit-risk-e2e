@@ -184,6 +184,8 @@ def run_batch_inference(
         strategy="SingleRecord",
     )
 
+    # SageMaker appends a ".out" extension to each output file.
+    # E.g. part-00000.parquet becomes part-00000.parquet.out
     transformer.transform(
         data=gold_inference_s3,
         content_type="application/x-parquet",

@@ -194,7 +194,14 @@ def register_champion(run_id: str) -> str:
         version=mv.version,
         stage="Staging",
     )
-    logger.info(f"Registered: {REGISTRY_MODEL_NAME} v{mv.version} => Staging")
+    client.set_registered_model_alias(
+        name=REGISTRY_MODEL_NAME,
+        alias="champion",
+        version=mv.version,
+    )
+    logger.info(
+        f"Registered: {REGISTRY_MODEL_NAME} v{mv.version} => Staging + @champion"
+    )
     return mv.version
 
 
@@ -274,6 +281,13 @@ def main(args: argparse.Namespace) -> None:
             f"AUC {metrics['test_auc']:.4f} >= threshold {args.auc_threshold}: {passes_threshold}"
         )
 
+        # Load feature list so inference knows which columns to use
+        feature_config_path = os.path.join(
+            PREP_META_DIR, "feature_config.json"
+        )
+        with open(feature_config_path) as f:
+            feature_config = json.load(f)
+
         save_report(
             report={
                 "champion_name": tuning_summary["champion_name"],
@@ -287,6 +301,7 @@ def main(args: argparse.Namespace) -> None:
                 "auc_threshold": args.auc_threshold,
                 "passes_threshold": passes_threshold,
                 "registered_version": registered_version,
+                "feature_columns": feature_config["features"],
             },
             output_path=OUTPUT_PATH,
         )

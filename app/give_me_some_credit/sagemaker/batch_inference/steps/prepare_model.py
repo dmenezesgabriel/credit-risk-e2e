@@ -30,6 +30,7 @@ import tarfile
 
 import mlflow
 import mlflow.artifacts
+import mlflow.exceptions
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
     OTLPLogExporter,
@@ -81,14 +82,25 @@ def setup_otel_logging(service_name: str):
 # ---------------------------------------------------------------------------
 # Resolve artifacts from MLflow
 # ---------------------------------------------------------------------------
-def get_staging_run_id(client: mlflow.tracking.MlflowClient) -> str:
-    """Get the run_id of the latest Staging version of the champion model."""
+def get_champion_run_id(client: mlflow.tracking.MlflowClient) -> str:
+    """Get the run_id of the champion model via @champion alias (with Staging fallback)."""
+    try:
+        mv = client.get_model_version_by_alias(REGISTRY_MODEL_NAME, "champion")
+        logger.info(
+            f"Found {REGISTRY_MODEL_NAME} v{mv.version} "
+            f"(alias=champion, run_id={mv.run_id})"
+        )
+        return mv.run_id
+    except mlflow.exceptions.MlflowException:
+        logger.warning(
+            "No @champion alias found, falling back to Staging stage"
+        )
     versions = client.get_latest_versions(
         REGISTRY_MODEL_NAME, stages=["Staging"]
     )
     if not versions:
         raise RuntimeError(
-            f"No Staging version found for '{REGISTRY_MODEL_NAME}'"
+            f"No champion alias or Staging version found for '{REGISTRY_MODEL_NAME}'"
         )
     version = versions[0]
     logger.info(
@@ -162,7 +174,7 @@ def main(args: argparse.Namespace) -> None:
         mlflow.set_tracking_uri(args.mlflow_uri)
 
         client = mlflow.tracking.MlflowClient()
-        champion_run_id = get_staging_run_id(client)
+        champion_run_id = get_champion_run_id(client)
         preprocessor_run_id = get_preprocessor_run_id(PREP_META_DIR)
 
         # Stage artifacts into a temp directory before tarring
