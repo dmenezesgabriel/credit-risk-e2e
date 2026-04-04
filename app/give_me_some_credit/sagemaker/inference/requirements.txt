@@ -1,0 +1,13 @@
+# Pinned deps for the SageMaker inference container.
+# ML library versions MUST match training to avoid deserialization issues.
+flask==3.1.1
+gunicorn==23.0.0
+gevent==25.4.1
+pandas==2.2.3
+pyarrow==19.0.1
+numpy==2.2.3
+scikit-learn==1.6.1
+xgboost==2.1.4
+lightgbm==4.6.0
+catboost==1.2.8
+mlflow==2.21.3

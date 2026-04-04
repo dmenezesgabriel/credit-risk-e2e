@@ -220,8 +220,9 @@ Airflow UI Retries:
 - [scikit_learn_bring_your_own_container_and_own_model_local_serving](https://github.com/aws-samples/amazon-sagemaker-local-mode/tree/main/scikit_learn_bring_your_own_container_and_own_model_local_serving)
 - [feast.dev docs](https://rtd.feast.dev/en/latest/#feast.repo_config.RepoConfig)
 - [sagemaker-pipelines-bridging-the-gap-between-local-testing-and-deployment](https://aws.plainenglish.io/sagemaker-pipelines-bridging-the-gap-between-local-testing-and-deployment-b5fcd8694b80)
+- https://github.com/aws-samples/amazon-sagemaker-local-mode/blob/main/tensorflow_bring_your_own_california_housing_local_training_and_batch_transform/tensorflow_bring_your_own_california_housing_local_training_and_batch_transform.py
 - [automating-feature-engineering-workflows-with-amazon-managed-workflows-for-apache-airflow-mwaa](https://medium.com/@TransformationalLeader_Surjeet/automating-feature-engineering-workflows-with-amazon-managed-workflows-for-apache-airflow-mwaa-b557aa46b1f5)
 - [integrating-opentelemetry-for-logging-in-python-a-practical-guide](https://medium.com/@lakinduboteju/integrating-opentelemetry-for-logging-in-python-a-practical-guide-fe52bff61edc)
-
 - https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF
 - https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF
+- https://github.com/SpillwaveSolutions/mastering-aws-cli/blob/main/references/s3.md

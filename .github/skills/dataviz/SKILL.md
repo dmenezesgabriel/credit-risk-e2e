@@ -1,6 +1,6 @@
 ---
 name: dataviz
-description: Describe what this skill does and when to use it. Include keywords that help agents identify relevant tasks.
+description: use when creating data visualization for example charts, dashboards.
 ---
 
 # Data Visualization Expert Skill

@@ -15,14 +15,15 @@ x-airflow-env: &airflow-env
   AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 1
   AIRFLOW__CORE__LAZY_LOAD_PROVIDERS: "True"
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
-  AIRFLOW__WEBSERVER__SECRET_KEY: "your-super-secret-key-change-me"
-  AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+  AIRFLOW__API_SERVER__SECRET_KEY: "your-super-secret-key-change-me"
+  AIRFLOW__API_AUTH__BACKEND: airflow.api_auth.backend.basic_auth
   PYTHONWARNINGS: "ignore::SyntaxWarning"
 
 x-airflow-volumes: &airflow-volumes
   - ./app/airflow/dags:/opt/airflow/dags
   - ./app:/workspace
   - /var/run/docker.sock:/var/run/docker.sock
+  - ./config/airflow/passwords.json:/opt/airflow/passwords.json
 
 x-resources-micro: &resources-micro
   deploy:
@@ -240,7 +241,10 @@ services:
     <<: *resources-medium
     group_add:
       - "${DOCKER_GID}"
-    image: apache/airflow:2.9.3
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: mlops-lab-airflow:slim-3.1.8-python3.11
     container_name: airflow-init
     depends_on:
       postgres-db:
@@ -266,7 +270,10 @@ services:
     <<: *resources-xlarge
     group_add:
       - "${DOCKER_GID}"
-    image: apache/airflow:2.9.3
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: mlops-lab-airflow:slim-3.1.8-python3.11
     container_name: airflow-webserver
     depends_on:
       airflow-init:
@@ -275,11 +282,11 @@ services:
       - "8080:8080"
     environment:
       <<: [*aws-env, *airflow-env, *container-env]
-      AIRFLOW__WEBSERVER__WORKERS: 1
-      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: 300
-      AIRFLOW__WEBSERVER__DEFAULT_UI_COLOR_MODE: "dark"
+      AIRFLOW__API_SERVER__WORKERS: 1
+      AIRFLOW__API_SERVER__WEB_SERVER_MASTER_TIMEOUT: 300
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/passwords.json
     volumes: *airflow-volumes
-    command: webserver
+    command: api-server
     networks:
       - mlops-lab-net
     env_file:
@@ -287,7 +294,8 @@ services:
     tmpfs:
       - /tmp:size=512m
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      test:
+        ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -299,7 +307,10 @@ services:
     <<: *resources-large # scheduler needs burst room when triggering DAGs
     group_add:
       - "${DOCKER_GID}"
-    image: apache/airflow:2.9.3
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: mlops-lab-airflow:slim-3.1.8-python3.11
     container_name: airflow-scheduler
     depends_on:
       airflow-init:
@@ -321,11 +332,7 @@ services:
     tmpfs:
       - /tmp:size=512m
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'airflow jobs check --job-type SchedulerJob --hostname "$(hostname)"',
-        ]
+      test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --local"]
       interval: 30s
       timeout: 10s
       retries: 5

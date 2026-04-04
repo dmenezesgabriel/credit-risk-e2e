@@ -13,20 +13,6 @@
                 "GRAFANA_PASSWORD": "admin"
             }
         },
-        "mlflow-mcp": {
-            "command": "uv",
-            "args": [
-                "run",
-                "--with",
-                "mlflow[mcp]>=3.5.1",
-                "mlflow",
-                "mcp",
-                "run"
-            ],
-            "env": {
-                "MLFLOW_TRACKING_URI": "<http://localhost:5000>"
-            }
-        },
         "duckdb": {
             "command": "uvx",
             "args": [
@@ -37,6 +23,20 @@
                 "--allow-switch-databases"
             ]
         },
+        "s3": {
+            "command": "uv",
+            "args": [
+                "run",
+                "mcp/s3_mcp_server/server.py"
+            ],
+            "env": {
+                "AWS_REGION": "us-east-1",
+                "AWS_ACCESS_KEY_ID": "test",
+                "AWS_SECRET_ACCESS_KEY": "test",
+                "AWS_ENDPOINT_URL": "http://localhost:4566",
+                "S3_MAX_BUCKETS": "5"
+            }
+        }
         // "playwright": {
         //     "command": "npx",
         //     "args": [

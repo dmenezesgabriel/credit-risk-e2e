@@ -19,3 +19,10 @@ down:
 
 tear-down:
 	$(COMPOSE) down -v
+
+
+up-%:
+	$(COMPOSE) up -d $(*)
+
+down-%:
+	$(COMPOSE) down $(*)

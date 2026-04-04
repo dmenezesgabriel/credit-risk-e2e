@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# SageMaker inference entrypoint.
+# Starts nginx + gunicorn and waits for either to exit.
+
+set -e
+
+MODEL_SERVER_TIMEOUT=${MODEL_SERVER_TIMEOUT:-120}
+MODEL_SERVER_WORKERS=${MODEL_SERVER_WORKERS:-1}
+
+# Link log streams to stdout/stderr for container logging
+ln -sf /dev/stdout /var/log/nginx/access.log
+ln -sf /dev/stderr /var/log/nginx/error.log
+
+echo "Starting inference server with ${MODEL_SERVER_WORKERS} workers."
+
+nginx -c /opt/program/nginx.conf &
+NGINX_PID=$!
+
+gunicorn \
+    --timeout "${MODEL_SERVER_TIMEOUT}" \
+    -k gevent \
+    -b unix:/tmp/gunicorn.sock \
+    -w "${MODEL_SERVER_WORKERS}" \
+    wsgi:app &
+GUNICORN_PID=$!
+
+trap "kill ${NGINX_PID} ${GUNICORN_PID}; exit 0" SIGTERM
+
+# Wait for either process to exit, then shut down both.
+wait -n ${NGINX_PID} ${GUNICORN_PID}
+kill ${NGINX_PID} ${GUNICORN_PID} 2>/dev/null
+echo "Inference server exiting."
