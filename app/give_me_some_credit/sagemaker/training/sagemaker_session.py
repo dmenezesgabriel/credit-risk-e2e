@@ -24,6 +24,7 @@ from typing import TypeAlias
 import boto3
 import sagemaker
 import sagemaker.local.image as sm_image
+import sagemaker.local.utils as sm_local_utils
 import yaml
 from typing_extensions import Protocol, TypedDict, Unpack
 
@@ -84,6 +85,54 @@ def _apply_network_patch(network: str) -> None:
     sm_image._SageMakerContainer._compose = _patched_compose
 
 
+def _apply_serving_host_patch() -> None:
+    """
+    Patch SageMaker local-mode host resolution so the SDK can reach
+    serving containers (Batch Transform) from inside a Docker container.
+
+    The SDK defaults to ``localhost`` for the serving endpoint, which
+    fails in a container-in-container setup because ``localhost`` refers
+    to the *caller* container, not the Docker host where the port is
+    mapped.  We resolve the Docker host gateway IP from /proc/net/route
+    instead, so ``gateway_ip:8080`` reaches the inference container via
+    the port mapping.
+
+    Caveat: same as _apply_network_patch — private SDK internal.
+    """
+    import sagemaker.local.entities as sm_entities
+    import sagemaker.local.local_session as sm_local_session
+
+    _original = getattr(sm_local_utils, "get_docker_host", None)
+    if _original is None:
+        logger.warning(
+            "Cannot patch get_docker_host: function not found in "
+            "sagemaker.local.utils — Batch Transform may not work"
+        )
+        return
+
+    def _patched_get_docker_host() -> str:
+        try:
+            with open("/proc/net/route") as f:
+                for line in f:
+                    fields = line.strip().split()
+                    if len(fields) >= 3 and fields[1] == "00000000":
+                        hex_gw = fields[2]
+                        ip = ".".join(
+                            str(int(hex_gw[i : i + 2], 16))
+                            for i in (6, 4, 2, 0)
+                        )
+                        logger.info(f"Resolved Docker host gateway: {ip}")
+                        return ip
+        except Exception as e:
+            logger.warning(f"Gateway resolution failed: {e}")
+        return _original()
+
+    # Patch every module that imported get_docker_host by name
+    sm_local_utils.get_docker_host = _patched_get_docker_host
+    sm_entities.get_docker_host = _patched_get_docker_host
+    sm_local_session.get_docker_host = _patched_get_docker_host
+
+
 def _build_local_session(
     **kwargs: Unpack[SessionBuilderKwargs],
 ) -> SessionPair:
@@ -113,6 +162,7 @@ def _build_local_session(
     sagemaker_session.default_bucket = lambda: s3_bucket
 
     _apply_network_patch(network)
+    _apply_serving_host_patch()
 
     logger.info(f"Local SageMaker session ready (bucket={s3_bucket})")
     return sagemaker_session, boto_session

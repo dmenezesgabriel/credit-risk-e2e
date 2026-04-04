@@ -19,6 +19,17 @@ Build image:
 
 Run locally:
     python inference/sm_batch_inference.py --mode local --ingestion-date 2026-03-21
+
+Local-mode prerequisites (Jupyter container):
+    - ``procps`` apt package must be installed.  The SageMaker SDK uses
+      ``pgrep`` (from procps) to find and kill child processes of the
+      ``docker-compose up`` serving container during cleanup
+      (``sagemaker.local.utils.kill_child_processes``).  Without it,
+      Batch Transform succeeds but crashes on ``stop_serving()``.
+    - ``sagemaker_session.make_sagemaker_session`` patches
+      ``get_docker_host`` so the SDK connects to the Docker host gateway
+      IP instead of ``localhost`` (which inside a container refers to
+      the caller, not the Docker host where port 8080 is mapped).
 """
 
 import argparse
@@ -127,12 +138,12 @@ def run_batch_inference(
         ],
         inputs=[
             ProcessingInput(
-                source=f"{pipeline_s3}/evaluation",
+                source=f"{pipeline_s3}/evaluation/evaluation_report.json",
                 destination="/opt/ml/processing/input/evaluation",
                 input_name="evaluation",
             ),
             ProcessingInput(
-                source=f"{pipeline_s3}/preprocessing/preprocessor",
+                source=f"{pipeline_s3}/preprocessing/preprocessor/prep_meta.json",
                 destination="/opt/ml/processing/input/prep_meta",
                 input_name="prep_meta",
             ),
@@ -170,6 +181,7 @@ def run_batch_inference(
         instance_type=instance_type,
         output_path=predictions_s3,
         accept="application/x-parquet",
+        strategy="SingleRecord",
     )
 
     transformer.transform(
