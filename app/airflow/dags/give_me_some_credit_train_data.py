@@ -32,7 +32,7 @@ def glue_task(
     script: str,
     extra_args: str = "",
 ) -> DockerOperator:
-    """Run a Glue/Spark job via Docker with optional positional args after {{ ds }}."""
+    """Run a Glue/Spark job via Docker with optional positional args."""
     return DockerOperator(
         task_id=task_id,
         image="public.ecr.aws/glue/aws-glue-libs:5",
@@ -48,8 +48,8 @@ def glue_task(
         --conf spark.hadoop.fs.s3a.path.style.access=true
         --conf spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem
         --conf spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider
-        /workspace/give_me_some_credit/glue_jobs/{script} {{{{ ds }}}} {extra_args}
-        """,  # {{ ds }} is Airflow's logical execution date
+        /workspace/give_me_some_credit/glue_jobs/{script} {{{{ macros.datetime.now().strftime('%Y-%m-%d') }}}} {extra_args}
+        """,
         docker_url="unix://var/run/docker.sock",
         network_mode=NETWORK,
         mounts=[
@@ -81,7 +81,7 @@ with DAG(
     dag_id="give_me_some_credit_train_data",
     description="Bronze => Silver => Gold",
     start_date=datetime(2024, 1, 1),
-    schedule_interval=None,  # triggered manually or by upstream sensor
+    schedule=None,  # triggered manually or by upstream sensor
     catchup=False,
     tags=["give-me-some-credit", "data-pipeline", "kaggle", "train-data"],
 ) as dag:
