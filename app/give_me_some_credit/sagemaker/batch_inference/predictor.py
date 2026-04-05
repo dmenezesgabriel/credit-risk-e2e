@@ -20,6 +20,7 @@ import logging
 import os
 import threading
 import traceback
+from dataclasses import dataclass, field
 
 import flask
 import mlflow.sklearn
@@ -103,6 +104,64 @@ class ScoringService:
         )
 
 
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+MAX_NULL_RATE = 0.5
+
+
+@dataclass
+class ValidationResult:
+    is_valid: bool
+    missing_columns: list[str] = field(default_factory=list)
+    high_null_columns: list[str] = field(default_factory=list)
+    row_count: int = 0
+
+
+def validate_input(
+    df: pd.DataFrame,
+    expected_features: list[str],
+) -> ValidationResult:
+    """Lightweight schema and null-rate validation. Early return on failure."""
+    missing = [col for col in expected_features if col not in df.columns]
+    if missing:
+        return ValidationResult(
+            is_valid=False, missing_columns=missing, row_count=len(df)
+        )
+
+    high_null = [
+        col
+        for col in expected_features
+        if df[col].isna().mean() > MAX_NULL_RATE
+    ]
+
+    return ValidationResult(
+        is_valid=len(high_null) == 0,
+        high_null_columns=high_null,
+        row_count=len(df),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Score distribution logging
+# ---------------------------------------------------------------------------
+def compute_score_summary(
+    probabilities: np.ndarray,
+    threshold: float,
+) -> dict:
+    """Compute score distribution summary for output drift visibility."""
+    predictions = (probabilities >= threshold).astype(int)
+    return {
+        "mean_probability": round(float(probabilities.mean()), 6),
+        "std_probability": round(float(probabilities.std()), 6),
+        "p25": round(float(np.percentile(probabilities, 25)), 6),
+        "p50": round(float(np.percentile(probabilities, 50)), 6),
+        "p75": round(float(np.percentile(probabilities, 75)), 6),
+        "pct_predicted_default": round(float(predictions.mean()), 6),
+        "record_count": len(probabilities),
+    }
+
+
 app = flask.Flask(__name__)
 
 
@@ -152,7 +211,27 @@ def invocations():
 
     logger.info(f"Invoked with {len(df):,} records")
 
+    validation = validate_input(df, ScoringService.feature_columns)
+    if not validation.is_valid:
+        error_body = {
+            "error": "input_validation_failed",
+            "missing_columns": validation.missing_columns,
+            "high_null_columns": validation.high_null_columns,
+            "row_count": validation.row_count,
+        }
+        logger.warning(f"Validation failed: {json.dumps(error_body)}")
+        return flask.Response(
+            response=json.dumps(error_body),
+            status=422,
+            mimetype="application/json",
+        )
+
     result_df = ScoringService.predict(df)
+
+    score_summary = compute_score_summary(
+        result_df["probability"].values, ScoringService.optimal_threshold
+    )
+    logger.info(f"Score summary: {json.dumps(score_summary)}")
 
     buf = io.BytesIO()
     result_df.to_parquet(buf, index=False)

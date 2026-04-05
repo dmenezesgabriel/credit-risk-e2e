@@ -75,3 +75,41 @@ groups:
         annotations:
           summary: "Airflow scheduler container restarted"
           description: "The airflow-scheduler container has restarted in the last 10 minutes."
+
+  - name: ml_monitoring
+    interval: 60s
+    rules:
+      # Alert when max PSI exceeds 0.2 (major feature drift)
+      - alert: FeatureDriftDetected
+        expr: |
+          max(batch_psi_max) > 0.2
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Feature drift detected (PSI > 0.2)"
+          description: 'Max PSI score is {{ $value | printf "%.3f" }}. One or more features have drifted significantly from the training distribution.'
+
+      # Alert when predicted default rate deviates > 3x from training baseline
+      - alert: PredictionDistributionShift
+        expr: |
+          batch_pct_default > 0.3
+          OR
+          batch_pct_default < 0.01
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusual predicted default rate"
+          description: "Batch predicted default rate is {{ $value | humanizePercentage }}. Expected range: 1-30%."
+
+      # Alert when monitoring step itself fails (no metrics logged recently)
+      - alert: MonitoringStepStale
+        expr: |
+          time() - max(batch_duration_seconds) > 172800
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Batch monitoring has not run in 48h"
+          description: "No monitoring metrics received in the last 48 hours. The monitoring step may be failing."

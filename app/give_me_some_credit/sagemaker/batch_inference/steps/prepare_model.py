@@ -198,6 +198,13 @@ def main(args: argparse.Namespace) -> None:
         shutil.copy2(eval_src, eval_dst)
         logger.info(f"Copied evaluation report to {eval_dst}")
 
+        # Copy feature reference (drift baseline) if available
+        ref_src = os.path.join(PREP_META_DIR, "feature_reference.json")
+        if os.path.exists(ref_src):
+            ref_dst = os.path.join(staging_dir, "feature_reference.json")
+            shutil.copy2(ref_src, ref_dst)
+            logger.info(f"Copied feature_reference.json to {ref_dst}")
+
         create_model_tarball(staging_dir, OUTPUT_DIR)
 
         logger.info("Model preparation complete.")

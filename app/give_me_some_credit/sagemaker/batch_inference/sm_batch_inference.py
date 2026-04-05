@@ -143,7 +143,7 @@ def run_batch_inference(
                 input_name="evaluation",
             ),
             ProcessingInput(
-                source=f"{pipeline_s3}/preprocessing/preprocessor/prep_meta.json",
+                source=f"{pipeline_s3}/preprocessing/preprocessor/",
                 destination="/opt/ml/processing/input/prep_meta",
                 input_name="prep_meta",
             ),
@@ -193,6 +193,72 @@ def run_batch_inference(
     )
 
     logger.info(f"Step 2 complete: predictions written to {predictions_s3}")
+
+    # -----------------------------------------------------------------
+    # Step 3 — Monitoring (uses training image: has evidently, mlflow)
+    # -----------------------------------------------------------------
+    logger.info("Step 3: Running batch monitoring...")
+
+    monitoring_s3 = (
+        f"{pipeline_s3}/inference/monitoring/ingestion_date={ingestion_date}"
+    )
+
+    monitor_processor = ScriptProcessor(
+        command=["opentelemetry-instrument", "python"],
+        image_uri=training_image,
+        role=role,
+        instance_count=1,
+        instance_type=instance_type,
+        sagemaker_session=sagemaker_session,
+        env={
+            **shared_env,
+            "OTEL_SERVICE_NAME": "monitor-batch",
+        },
+    )
+
+    monitor_processor.run(
+        code=get_step_path("monitor_batch.py"),
+        arguments=[
+            "--mlflow-uri",
+            mlflow_uri,
+            "--experiment-name",
+            experiment_name,
+            "--ingestion-date",
+            ingestion_date,
+        ],
+        inputs=[
+            ProcessingInput(
+                source=gold_inference_s3,
+                destination="/opt/ml/processing/input/features",
+                input_name="features",
+            ),
+            ProcessingInput(
+                source=predictions_s3,
+                destination="/opt/ml/processing/input/predictions",
+                input_name="predictions",
+            ),
+            ProcessingInput(
+                source=f"{pipeline_s3}/preprocessing/preprocessor/",
+                destination="/opt/ml/processing/input/model_data",
+                input_name="model_data",
+            ),
+            ProcessingInput(
+                source=f"{pipeline_s3}/evaluation/evaluation_report.json",
+                destination="/opt/ml/processing/input/model_data",
+                input_name="evaluation",
+            ),
+        ],
+        outputs=[
+            ProcessingOutput(
+                output_name="report",
+                source="/opt/ml/processing/output/report",
+                destination=monitoring_s3,
+            ),
+        ],
+    )
+    logger.info(
+        f"Step 3 complete: monitoring report written to {monitoring_s3}"
+    )
 
 
 def parse_args() -> argparse.Namespace:

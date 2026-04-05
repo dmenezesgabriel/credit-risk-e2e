@@ -227,9 +227,32 @@ def save_splits(
         logger.info(f"Saved {name}: {len(df_out):,} rows => {out_file}")
 
 
+def compute_feature_reference(X_train: pd.DataFrame) -> dict:
+    """Compute per-feature statistics from raw training data as a drift baseline."""
+    desc = X_train.describe(percentiles=[0.25, 0.5, 0.75])
+    null_rates = X_train.isna().mean()
+
+    reference = {}
+    for col in X_train.columns:
+        stats = {"null_rate": round(float(null_rates[col]), 6)}
+        if col in desc.columns:
+            stats.update(
+                {
+                    "mean": round(float(desc.at["mean", col]), 6),
+                    "std": round(float(desc.at["std", col]), 6),
+                    "p25": round(float(desc.at["25%", col]), 6),
+                    "p50": round(float(desc.at["50%", col]), 6),
+                    "p75": round(float(desc.at["75%", col]), 6),
+                }
+            )
+        reference[col] = stats
+    return reference
+
+
 def save_metadata(
     run_id: str,
     random_state: int,
+    X_train: pd.DataFrame,
     y_train: pd.Series,
     y_val: pd.Series,
     y_test: pd.Series,
@@ -255,6 +278,13 @@ def save_metadata(
             f,
             indent=2,
         )
+
+    feature_reference = compute_feature_reference(X_train)
+    with open(os.path.join(OUTPUT_PREP, "feature_reference.json"), "w") as f:
+        json.dump(feature_reference, f, indent=2)
+    logger.info(
+        f"Saved feature_reference.json with {len(feature_reference)} features"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +359,9 @@ def main(args: argparse.Namespace) -> None:
         )
         logger.info(f"Preprocessor logged to MLflow run: {run_id}")
 
-        save_metadata(run_id, args.random_state, y_train, y_val, y_test)
+        save_metadata(
+            run_id, args.random_state, X_train, y_train, y_val, y_test
+        )
 
         logger.info("Preprocessing complete.")
     finally:

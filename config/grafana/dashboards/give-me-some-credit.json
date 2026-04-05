@@ -1,0 +1,571 @@
+{
+    "description": "Credit Risk — Batch inference monitoring: data quality, feature drift, score distribution.",
+    "editable": true,
+    "graphTooltip": 1,
+    "links": [
+        {
+            "title": "Overview",
+            "url": "/d/mlops-overview",
+            "type": "link",
+            "icon": "external link"
+        },
+        {
+            "title": "Pipelines",
+            "url": "/d/mlops-pipelines",
+            "type": "link",
+            "icon": "external link"
+        },
+        {
+            "title": "Logs",
+            "url": "/d/mlops-logs",
+            "type": "link",
+            "icon": "external link"
+        }
+    ],
+    "panels": [
+        {
+            "id": 1,
+            "type": "row",
+            "title": "Batch summary",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            }
+        },
+        {
+            "id": 2,
+            "type": "stat",
+            "title": "Records processed",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 1
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_row_count}}\"",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 3,
+            "type": "stat",
+            "title": "Duration (s)",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 1
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_duration_seconds}}\"",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "s",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            },
+                            {
+                                "value": 120,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 300,
+                                "color": "red"
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 4,
+            "type": "stat",
+            "title": "Drift detected",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 1
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_drift_detected}}\"",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "0.0": {
+                                    "text": "No",
+                                    "color": "green"
+                                },
+                                "0": {
+                                    "text": "No",
+                                    "color": "green"
+                                }
+                            }
+                        },
+                        {
+                            "type": "value",
+                            "options": {
+                                "1.0": {
+                                    "text": "Yes",
+                                    "color": "red"
+                                },
+                                "1": {
+                                    "text": "Yes",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ],
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 5,
+            "type": "stat",
+            "title": "Max null rate",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 1
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_null_max}}\"",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            },
+                            {
+                                "value": 0.1,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 0.3,
+                                "color": "red"
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 10,
+            "type": "row",
+            "title": "Score distribution",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 5
+            }
+        },
+        {
+            "id": 11,
+            "type": "timeseries",
+            "title": "Mean probability per batch",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 6
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_mean_probability}}\"",
+                    "legendFormat": "mean_probability",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "fixedColor": "blue",
+                        "mode": "fixed"
+                    },
+                    "custom": {
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "always"
+                    }
+                }
+            }
+        },
+        {
+            "id": 12,
+            "type": "timeseries",
+            "title": "% predicted default per batch",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 6
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_pct_default}}\"",
+                    "legendFormat": "pct_default",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "color": {
+                        "fixedColor": "orange",
+                        "mode": "fixed"
+                    },
+                    "custom": {
+                        "drawStyle": "line",
+                        "pointSize": 5,
+                        "showPoints": "always"
+                    }
+                }
+            }
+        },
+        {
+            "id": 20,
+            "type": "row",
+            "title": "Data quality",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 14
+            }
+        },
+        {
+            "id": 21,
+            "type": "logs",
+            "title": "Data quality logs",
+            "description": "Raw monitoring log entries for data quality inspection",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 15
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete`",
+                    "refId": "A"
+                }
+            ],
+            "options": {
+                "showTime": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "prettifyLogMessage": true
+            }
+        },
+        {
+            "id": 30,
+            "type": "row",
+            "title": "Feature drift",
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 23
+            }
+        },
+        {
+            "id": 31,
+            "type": "stat",
+            "title": "Drift share (% features drifted)",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 8,
+                "x": 0,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_drift_share}}\"",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "percentunit",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            },
+                            {
+                                "value": 0.2,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 0.5,
+                                "color": "red"
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 32,
+            "type": "stat",
+            "title": "Max PSI score",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 8,
+                "x": 8,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_psi_max}}\"",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            },
+                            {
+                                "value": 0.1,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 0.2,
+                                "color": "red"
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "id": 33,
+            "type": "stat",
+            "title": "Score std deviation",
+            "datasource": {
+                "type": "loki",
+                "uid": "${loki}"
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 8,
+                "x": 16,
+                "y": 24
+            },
+            "targets": [
+                {
+                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_score_std}}\"",
+                    "refId": "A"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            }
+                        ]
+                    }
+                }
+            },
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        }
+    ],
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "tags": [
+        "mlops",
+        "credit-risk",
+        "monitoring"
+    ],
+    "templating": {
+        "list": [
+            {
+                "name": "loki",
+                "type": "datasource",
+                "query": "loki",
+                "current": {
+                    "text": "Loki",
+                    "value": "loki"
+                },
+                "hide": 2
+            }
+        ]
+    },
+    "time": {
+        "from": "now-24h",
+        "to": "now"
+    },
+    "timezone": "browser",
+    "title": "Credit Risk — Batch Monitoring",
+    "uid": "credit-risk-monitoring",
+    "version": 1
+}
