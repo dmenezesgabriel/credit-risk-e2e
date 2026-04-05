@@ -53,20 +53,45 @@ flowchart TD
     style A10 fill:#0a3b6e,color:#fff,stroke:#fff,stroke-width:1px
 ```
 
+## Services Summary
+
+| Category               | Service                          | Purpose                                                     |
+| ---------------------- | -------------------------------- | ----------------------------------------------------------- |
+| **Compute / Dev**      | Jupyter                          | Interactive data science & experimentation environment      |
+| **Cloud Mock**         | LocalStack                       | Simulates AWS services locally (S3, Lambda, DynamoDB, etc.) |
+| **Database**           | Postgres                         | Metadata & application database (Airflow, MLflow, etc.)     |
+| **DB UI**              | Adminer                          | Web UI to manage Postgres                                   |
+| **ML Tracking**        | MLflow                           | Experiment tracking, model registry, artifact storage       |
+| **Orchestration**      | Airflow (web + scheduler + init) | DAG-based pipeline orchestration                            |
+| **Container Mgmt**     | Portainer                        | Docker UI for managing containers                           |
+| **Homepage UI**        | Homepage                         | Central dashboard for services                              |
+| **Metrics**            | Prometheus                       | Time-series metrics storage & scraping                      |
+| **Metrics Source**     | cAdvisor                         | Collects Docker container metrics                           |
+| **Visualization**      | Grafana                          | Dashboards for metrics, logs, traces                        |
+| **Logs (agent)**       | Promtail                         | Collects and ships logs                                     |
+| **Logs (storage)**     | Loki                             | Log aggregation & storage                                   |
+| **Tracing (pipeline)** | OTel Collector                   | Collects and routes telemetry data                          |
+| **Tracing (storage)**  | Tempo                            | Distributed tracing backend                                 |
+| **SSO/Auth**           | Authelia                         | Authentication & authorization (SSO)                        |
+| **Reverse Proxy**      | Caddy                            | Routing + TLS + SSO integration                             |
+| **LLM Inference**      | llama.cpp                        | Local LLM server for inference                              |
+| **Init Jobs**          | Portainer-init                   | Automates initial setup (e.g., OAuth config)                |
+
+### Observability
+
+| Type    | Stack                  |
+| ------- | ---------------------- |
+| Metrics | Prometheus + cAdvisor  |
+| Logs    | Promtail + Loki        |
+| Traces  | OTel Collector + Tempo |
+| UI      | Grafana                |
+
 ## Running Locally
 
 1. Run the containers:
 
 ```sh
 make up
-```
-
-2. Go to airflow web server and run the `credit_risk_pipeline_dag.py` ingestion DAG
-
-3. Verify if files were created:
-
-```sh
-aws --endpoint-url=http://localhost:4566 s3 ls s3://data-lake/ --recursive
 ```
 
 ## Useful commands
@@ -83,11 +108,6 @@ gh repo view --web
 docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}"
 ```
 
-Airflow UI Retries:
-
-- Retry: same TaskInstance, same compiled command, just runs again
-- Clear: new TaskInstance built from current DAG file on disk
-
 ## References
 
 - [Sagemaker Pipeline Local Mode](https://developers.cyberagent.co.jp/blog/archives/58870/)
@@ -101,3 +121,4 @@ Airflow UI Retries:
 - [Qwen2.5-Coder-1.5B-Instruct-GGUF](https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF)
 - [LFM2.5-350M-GGUF](https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF)
 - [mastering-aws-cli](https://github.com/SpillwaveSolutions/mastering-aws-cli/blob/main/references/s3.md)
+- [sagemaker-ml-workflow-with-apache-airflow](https://github.com/aws-samples/sagemaker-ml-workflow-with-apache-airflow/blob/master/README.md)

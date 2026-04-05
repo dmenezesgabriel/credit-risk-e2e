@@ -51,7 +51,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_row_count}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_row_count [$__range])",
                     "refId": "A"
                 }
             ],
@@ -95,7 +95,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_duration_seconds}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_duration_seconds [$__range])",
                     "refId": "A"
                 }
             ],
@@ -147,7 +147,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_drift_detected}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_drift_detected [$__range])",
                     "refId": "A"
                 }
             ],
@@ -218,7 +218,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_null_max}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_null_max [$__range])",
                     "refId": "A"
                 }
             ],
@@ -282,7 +282,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_mean_probability}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_mean_probability [$__range])",
                     "legendFormat": "mean_probability",
                     "refId": "A"
                 }
@@ -318,7 +318,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_pct_default}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_pct_default [$__range])",
                     "legendFormat": "pct_default",
                     "refId": "A"
                 }
@@ -406,7 +406,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_drift_share}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_drift_share [$__range])",
                     "refId": "A"
                 }
             ],
@@ -458,7 +458,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_psi_max}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_psi_max [$__range])",
                     "refId": "A"
                 }
             ],
@@ -510,7 +510,7 @@
             },
             "targets": [
                 {
-                    "expr": "{service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | line_format \"{{.batch_score_std}}\"",
+                    "expr": "last_over_time({service_name=\"monitor-batch\"} |= `batch_monitoring_complete` | json | unwrap batch_score_std [$__range])",
                     "refId": "A"
                 }
             ],

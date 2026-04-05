@@ -28,9 +28,9 @@ from dataclasses import asdict, dataclass, field
 import mlflow
 import numpy as np
 import pandas as pd
-from evidently import ColumnMapping
-from evidently.metric_preset import DataDriftPreset
-from evidently.report import Report
+from evidently.legacy.metric_preset import DataDriftPreset
+from evidently.legacy.pipeline.column_mapping import ColumnMapping
+from evidently.legacy.report import Report
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
     OTLPLogExporter,
@@ -47,6 +47,7 @@ logger = logging.getLogger("monitor_batch")
 FEATURES_DIR = "/opt/ml/processing/input/features"
 PREDICTIONS_DIR = "/opt/ml/processing/input/predictions"
 MODEL_DATA_DIR = "/opt/ml/processing/input/model_data"
+EVALUATION_DIR = "/opt/ml/processing/input/evaluation"
 OUTPUT_DIR = "/opt/ml/processing/output/report"
 
 
@@ -215,12 +216,12 @@ def log_monitoring_metrics(
 # Data loading
 # ---------------------------------------------------------------------------
 def load_parquet_dir(directory: str) -> pd.DataFrame:
-    """Load all parquet files from a directory into a single DataFrame."""
-    files = [
-        os.path.join(directory, f)
-        for f in os.listdir(directory)
-        if f.endswith(".parquet") or f.endswith(".parquet.out")
-    ]
+    """Load all parquet files from a directory (recursively) into a single DataFrame."""
+    files = []
+    for root, _dirs, filenames in os.walk(directory):
+        for f in filenames:
+            if f.endswith(".parquet") or f.endswith(".parquet.out"):
+                files.append(os.path.join(root, f))
     if not files:
         raise FileNotFoundError(f"No parquet files found in {directory}")
     return pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
@@ -409,7 +410,7 @@ def main(args: argparse.Namespace) -> None:
 
         # Load model metadata
         eval_report = load_json(
-            os.path.join(MODEL_DATA_DIR, "evaluation_report.json")
+            os.path.join(EVALUATION_DIR, "evaluation_report.json")
         )
         feature_config = load_json(
             os.path.join(MODEL_DATA_DIR, "feature_config.json")

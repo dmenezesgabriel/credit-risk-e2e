@@ -244,7 +244,7 @@ def run_batch_inference(
             ),
             ProcessingInput(
                 source=f"{pipeline_s3}/evaluation/evaluation_report.json",
-                destination="/opt/ml/processing/input/model_data",
+                destination="/opt/ml/processing/input/evaluation",
                 input_name="evaluation",
             ),
         ],

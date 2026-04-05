@@ -19,6 +19,7 @@ x-airflow-env: &airflow-env
   AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow
   AIRFLOW__API_SERVER__SECRET_KEY: "your-super-secret-key-change-me"
   AIRFLOW__API_AUTH__BACKEND: airflow.api_auth.backend.basic_auth
+  AIRFLOW__STANDARD__VENV_INSTALL_METHOD: uv
   PYTHONWARNINGS: "ignore::SyntaxWarning"
 
 x-airflow-volumes: &airflow-volumes
@@ -27,6 +28,8 @@ x-airflow-volumes: &airflow-volumes
   - /var/run/docker.sock:/var/run/docker.sock
   - ./config/airflow/passwords.json:/opt/airflow/passwords.json
   - airflow_logs:/opt/airflow/logs
+  - /tmp:/tmp # SageMaker local mode writes compose files read by Docker daemon
+  - uv_cache:/home/airflow/.cache/uv # shared venv download cache
 
 x-resources-micro: &resources-micro
   deploy:
@@ -340,8 +343,6 @@ services:
       - mlops-lab-net
     env_file:
       - .env
-    tmpfs:
-      - /tmp:size=512m
     healthcheck:
       test: ["CMD-SHELL", "airflow jobs check --job-type SchedulerJob --local"]
       interval: 30s
