@@ -186,6 +186,7 @@ services:
       - "promtail_enabled=true"
 
   adminer:
+    profiles: [tools]
     <<: *resources-small # pure PHP UI, barely uses anything
     image: adminer:5.4.1
     container_name: adminer
@@ -631,6 +632,7 @@ services:
     restart: "no"
 
   llamacpp:
+    profiles: [llm]
     <<: *resources-large
     image: ghcr.io/ggml-org/llama.cpp:server
     container_name: llamacpp

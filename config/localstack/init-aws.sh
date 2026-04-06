@@ -5,7 +5,7 @@ set -e
 BACKUP_PATH="/var/lib/localstack/s3_backups"
 
 echo "================================================"
-echo "LocalStack bootstrap - credit-risk-e2e"
+echo "LocalStack bootstrap - mlops-lab"
 echo "================================================"
 
 # Function to create and restore bucket

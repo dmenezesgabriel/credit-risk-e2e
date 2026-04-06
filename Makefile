@@ -1,13 +1,23 @@
-.PHONY: up down tear-down
+.PHONY: up down tear-down up-llm up-adminer
 
 UID := $(shell id -u)
 GID := $(shell id -g)
 DOCKER_GID := $(shell stat -c '%g' /var/run/docker.sock)
 DOCKER_ENV := UID=$(UID) GID=$(GID) DOCKER_GID=$(DOCKER_GID)
 COMPOSE := $(DOCKER_ENV) docker compose
+COMPOSE_ALL := $(COMPOSE) --profile llm --profile tools
 
-up: generate-oidc-key
+setup-hosts: ## Ensure *.app.localhost resolves to 127.0.0.1
+	@bash scripts/setup_hosts.sh
+
+up: generate-oidc-key setup-hosts
 	$(COMPOSE) up -d
+
+up-llm: ## Start llamacpp LLM server
+	$(COMPOSE) --profile llm up -d llamacpp
+
+up-adminer: ## Start Adminer DB UI
+	$(COMPOSE) --profile tools up -d adminer
 
 down:
 	@echo "Syncing S3 data to volume before shutdown..."
@@ -15,11 +25,10 @@ down:
 	docker exec localstack mkdir -p /var/lib/localstack/s3_backups/mlflow-artifacts
 	docker exec localstack awslocal s3 sync s3://data-lake /var/lib/localstack/s3_backups/data-lake
 	docker exec localstack awslocal s3 sync s3://mlflow-artifacts /var/lib/localstack/s3_backups/mlflow-artifacts
-	$(COMPOSE) down
+	$(COMPOSE_ALL) down
 
 tear-down:
-	$(COMPOSE) down -v
-
+	$(COMPOSE_ALL) down -v
 
 up-%:
 	$(COMPOSE) up -d $(*)
