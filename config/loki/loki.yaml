@@ -65,7 +65,7 @@ limits_config:
 compactor:
   working_directory: /loki/compactor
   retention_enabled: true
-  retention_delete_delay: 2h
+  retention_delete_delay: 30m
   delete_request_store: filesystem
 
 query_range:
@@ -73,7 +73,7 @@ query_range:
     cache:
       embedded_cache:
         enabled: true
-        max_size_mb: 50
+        max_size_mb: 10
 
 analytics:
   reporting_enabled: false

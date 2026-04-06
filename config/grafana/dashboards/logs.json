@@ -200,7 +200,7 @@
             ]
         }
     ],
-    "refresh": "30s",
+    "refresh": "2m",
     "schemaVersion": 38,
     "tags": [
         "mlops"

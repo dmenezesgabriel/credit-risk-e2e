@@ -10,6 +10,12 @@ receivers:
 
 processors:
   batch:
+    send_batch_size: 512
+    timeout: 10s
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 75
+    spike_limit_mib: 20
 
 exporters:
   otlp/tempo:
@@ -24,21 +30,21 @@ exporters:
     endpoint: "0.0.0.0:8889"
 
   debug:
-    verbosity: detailed
+    verbosity: basic
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlp/tempo]
 
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/loki]
 
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [prometheus]

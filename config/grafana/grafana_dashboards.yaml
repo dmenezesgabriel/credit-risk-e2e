@@ -8,6 +8,6 @@ providers:
     folder: ""
     type: file
     disableDeletion: false
-    updateIntervalSeconds: 30
+    updateIntervalSeconds: 300
     options:
       path: /opt/grafana/dashboards
