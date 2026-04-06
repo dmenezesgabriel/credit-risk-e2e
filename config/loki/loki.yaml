@@ -42,9 +42,10 @@ ingester:
       kvstore:
         store: inmemory
       replication_factor: 1
-  chunk_idle_period: 1h
   max_chunk_age: 2h
+  chunk_idle_period: 5m
   chunk_retain_period: 30s
+  chunk_target_size: 524288
 
 # ── Query scheduler: single replica is fine, don't require a quorum ─────────
 query_scheduler:

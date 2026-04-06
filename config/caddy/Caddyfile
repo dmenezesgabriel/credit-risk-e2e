@@ -1,3 +1,11 @@
+# --- Global options ---
+# default_sni: when clients connect to an IP address (127.0.0.1), they don't
+# send SNI. This tells Caddy to assume "127.0.0.1" so it can match the right
+# site block and serve the correct cert.
+{
+	default_sni 127.0.0.1
+}
+
 # --- Shared SSO snippet ---
 # Validates every request against Authelia and forwards identity headers.
 # Headers are consumed by Grafana (auth.proxy) and available to all backends.
@@ -37,6 +45,42 @@ airflow.app.localhost {
 
 # Portainer — SSO gated + internal OAuth auth
 portainer.app.localhost {
+	tls internal
+	import authelia
+	reverse_proxy portainer:9000
+}
+
+# --- 127.0.0.1 port-based access (ChromeOS / Crostini) ---
+# Uses Caddy's internal TLS (self-signed) — required by Authelia session cookies.
+# `bind 0.0.0.0` overrides the 127.0.0.1 listen address so Docker port mapping works,
+# while keeping 127.0.0.1 as the cert SAN.
+
+# Authelia portal — no forward_auth here (would loop)
+https://127.0.0.1:9091 {
+	bind 0.0.0.0
+	tls internal
+	reverse_proxy authelia:9091
+}
+
+# Airflow — SSO gated + internal OIDC auth
+https://127.0.0.1:8080 {
+	bind 0.0.0.0
+	tls internal
+	import authelia
+	reverse_proxy airflow-webserver:8080
+}
+
+# Grafana — SSO via auth.proxy headers (:3001 avoids conflict with homepage :3000)
+https://127.0.0.1:3001 {
+	bind 0.0.0.0
+	tls internal
+	import authelia
+	reverse_proxy grafana:3000
+}
+
+# Portainer — SSO gated + internal OAuth auth
+https://127.0.0.1:9000 {
+	bind 0.0.0.0
 	tls internal
 	import authelia
 	reverse_proxy portainer:9000

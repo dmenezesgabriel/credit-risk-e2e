@@ -24,6 +24,12 @@ session:
       expiration: 12h
       inactivity: 1h
       default_redirection_url: "https://home.app.localhost"
+    # 127.0.0.1 port-based access (ChromeOS / Crostini)
+    - domain: "127.0.0.1"
+      authelia_url: "https://127.0.0.1:9091"
+      expiration: 12h
+      inactivity: 1h
+      default_redirection_url: "https://127.0.0.1:3000"
 
 storage:
   encryption_key: "a-local-dev-encryption-key-that-must-be-at-least-20-chars"
@@ -65,6 +71,7 @@ identity_providers:
         # generates this callback URL from its own scheme (http).
         redirect_uris:
           - "http://airflow.app.localhost/auth/oauth-authorized/authelia"
+          - "https://127.0.0.1:8080/auth/oauth-authorized/authelia"
         scopes:
           - "openid"
           - "profile"
@@ -83,6 +90,7 @@ identity_providers:
         consent_mode: "implicit"
         redirect_uris:
           - "https://portainer.app.localhost"
+          - "https://127.0.0.1:9000"
         scopes:
           - "openid"
           - "profile"

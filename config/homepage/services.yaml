@@ -20,7 +20,7 @@
           stats: true
 
     - Airflow:
-        href: https://airflow.app.localhost
+        href: https://127.0.0.1:8080
         description: Pipeline orchestration
         icon: apache-airflow.png
         widget:
@@ -51,7 +51,7 @@
           stats: true
 
     - Grafana:
-        href: https://grafana.app.localhost
+        href: https://127.0.0.1:3001
         description: Dashboards & visualization
         icon: si-grafana
         widget:
@@ -82,7 +82,7 @@
           stats: true
 
     - Portainer:
-        href: https://portainer.app.localhost
+        href: https://127.0.0.1:9000
         description: Container manager
         icon: portainer.png
         widget:
@@ -92,7 +92,7 @@
           stats: true
 
     - Authelia:
-        href: https://auth.app.localhost
+        href: https://127.0.0.1:9091
         description: SSO Portal
         icon: authelia.png
         widget:
