@@ -128,6 +128,8 @@ x-resources-xxlarge: &resources-xxlarge
         cpus: "0.25"
 
 services:
+  # ---- Development ----
+
   jupyter:
     <<: *resources-xlarge # needs headroom for data processing
     build:
@@ -166,14 +168,17 @@ services:
     labels:
       - "promtail_enabled=true"
 
+  # ---- Storage ----
+
   localstack:
+    profiles: [model-registry, feature-store]
     <<: *resources-medium # spikes on lambda/s3 ops but mostly idle
     image: localstack/localstack:4
     container_name: localstack
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=s3,sqs,sns,dynamodb,lambda,iam,cloudwatch,ec2,kinesis,secretsmanager,ssm,stepfunctions,eventbridge,apigateway,logs
+      - SERVICES=${LOCALSTACK_SERVICES:-s3,sqs,sns,dynamodb,lambda,iam,cloudwatch,ec2,kinesis,secretsmanager,ssm,stepfunctions,eventbridge,apigateway,logs}
       - DEBUG=0
       - DOCKER_HOST=unix:///var/run/docker.sock
       - LOCALSTACK_HOST=localstack
@@ -195,6 +200,7 @@ services:
       - "promtail_enabled=true"
 
   postgres-db:
+    profiles: [model-registry, airflow]
     <<: *resources-medium # already tuned via postgres flags, cap above that
     image: postgres:18-alpine3.22
     container_name: postgres-db
@@ -229,27 +235,8 @@ services:
     labels:
       - "promtail_enabled=true"
 
-  adminer:
-    profiles: [tools]
-    <<: *resources-small # pure PHP UI, barely uses anything
-    image: adminer:5.4.1
-    container_name: adminer
-    ports:
-      - "8082:8080"
-    networks:
-      - mlops-lab-net
-    environment:
-      - ADMINER_DEFAULT_SERVER=postgres-db
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    labels:
-      - "promtail_enabled=true"
-
   mlflow:
+    profiles: [model-registry]
     <<: *resources-large # tracking server is mostly I/O bound
     build:
       context: .
@@ -288,16 +275,77 @@ services:
     labels:
       - "promtail_enabled=true"
 
-  pushgateway:
-    <<: *resources-small
-    image: prom/pushgateway:v1.11.0
-    container_name: pushgateway
+  # ---- Management ----
+
+  portainer:
+    profiles: [management]
+    <<: *resources-small # completely idle unless you're actively using the UI
+    image: portainer/portainer-ce:2.39.0-alpine
+    container_name: portainer
+    # 1. docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'superpassword' | cut -d ":" -f 2
+    # 2. You need to escape each $ character inside the hashed password with another $
+    command: --admin-password '$$2y$$05$$v1jZdrzA6cdaii29.kpMsu1tFC9OHDDF8rj9LeSNRPGeHUcT.WOS.' # superpassword
+    # Port removed — access via http://portainer.localhost through Caddy/Authelia SSO
     expose:
-      - "9091"
+      - "9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
     networks:
       - mlops-lab-net
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/-/healthy"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:9000/api/system/status || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "promtail_enabled=true"
+
+  homepage:
+    profiles: [management]
+    <<: *resources-small # static config renderer, ~30MB baseline
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    ports:
+      - "3000:3000"
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "home.app.localhost,localhost"
+    volumes:
+      - ./config/homepage:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - mlops-lab-net
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "promtail_enabled=true"
+
+  adminer:
+    profiles: [management]
+    <<: *resources-small # pure PHP UI, barely uses anything
+    image: adminer:5.4.1
+    container_name: adminer
+    ports:
+      - "8082:8080"
+    networks:
+      - mlops-lab-net
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres-db
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -305,49 +353,7 @@ services:
     labels:
       - "promtail_enabled=true"
 
-  marquez:
-    profiles: [lineage]
-    <<: *default-logging
-    mem_limit: 256m
-    memswap_limit: 256m
-    cpus: 0.50
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: "0.50"
-        reservations:
-          memory: 128M
-          cpus: "0.10"
-    image: marquezproject/marquez:0.50.0
-    container_name: marquez
-    expose:
-      - "5001"
-      - "5002"
-    environment:
-      MARQUEZ_CONFIG: /opt/marquez/marquez.yml
-    volumes:
-      - ./config/marquez/marquez.yml:/opt/marquez/marquez.yml
-    networks:
-      - mlops-lab-net
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--spider",
-          "-q",
-          "http://localhost:5001/api/v1/namespaces",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    labels:
-      - "promtail_enabled=true"
+  # ---- Orchestration ----
 
   airflow-init:
     profiles: [airflow]
@@ -460,61 +466,72 @@ services:
     labels:
       - "promtail_enabled=true"
 
-  portainer:
-    <<: *resources-small # completely idle unless you're actively using the UI
-    image: portainer/portainer-ce:2.39.0-alpine
-    container_name: portainer
-    # 1. docker run --rm httpd:2.4-alpine htpasswd -nbB admin 'superpassword' | cut -d ":" -f 2
-    # 2. You need to escape each $ character inside the hashed password with another $
-    command: --admin-password '$$2y$$05$$v1jZdrzA6cdaii29.kpMsu1tFC9OHDDF8rj9LeSNRPGeHUcT.WOS.' # superpassword
-    # Port removed — access via http://portainer.localhost through Caddy/Authelia SSO
+  marquez:
+    profiles: [lineage]
+    <<: *default-logging
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.50
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.50"
+        reservations:
+          memory: 128M
+          cpus: "0.10"
+    image: marquezproject/marquez:0.50.0
+    container_name: marquez
     expose:
-      - "9000"
+      - "5001"
+      - "5002"
+    environment:
+      MARQUEZ_CONFIG: /opt/marquez/marquez.yml
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
+      - ./config/marquez/marquez.yml:/opt/marquez/marquez.yml
     networks:
       - mlops-lab-net
+    depends_on:
+      postgres-db:
+        condition: service_healthy
     healthcheck:
       test:
         [
-          "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider http://localhost:9000/api/system/status || exit 1",
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:5001/api/v1/namespaces",
         ]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 60s
     labels:
       - "promtail_enabled=true"
 
-  homepage:
-    <<: *resources-small # static config renderer, ~30MB baseline
-    image: ghcr.io/gethomepage/homepage:latest
-    container_name: homepage
-    ports:
-      - "3000:3000"
-    environment:
-      HOMEPAGE_ALLOWED_HOSTS: "home.app.localhost,localhost"
-    volumes:
-      - ./config/homepage:/app/config
-      - /var/run/docker.sock:/var/run/docker.sock
+  # ---- Observability ----
+
+  pushgateway:
+    profiles: [observability]
+    <<: *resources-small
+    image: prom/pushgateway:v1.11.0
+    container_name: pushgateway
+    expose:
+      - "9091"
     networks:
       - mlops-lab-net
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1",
-        ]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/-/healthy"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 10s
     labels:
       - "promtail_enabled=true"
 
   prometheus:
+    profiles: [observability]
     <<: *resources-small
     image: prom/prometheus:v3.10.0-busybox
     container_name: prometheus
@@ -538,6 +555,7 @@ services:
       - "promtail_enabled=true"
 
   grafana:
+    profiles: [observability]
     <<: *default-logging
     mem_limit: 256m # needs extra for SQLite page cache — avoids I/O thrashing
     memswap_limit: 256m
@@ -587,7 +605,30 @@ services:
     labels:
       - "promtail_enabled=true"
 
+  loki:
+    profiles: [observability]
+    <<: *resources-small
+    image: grafana/loki:3.3.2
+    container_name: loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./config/loki/loki.yaml:/etc/loki/loki.yaml
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - mlops-lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "promtail_enabled=true"
+
   cadvisor:
+    profiles: [observability]
     <<: *resources-small
     image: gcr.io/cadvisor/cadvisor:v0.52.1
     container_name: cadvisor
@@ -613,6 +654,7 @@ services:
       - "promtail_enabled=true"
 
   tempo:
+    profiles: [observability]
     <<: *resources-small
     image: grafana/tempo:2.7.2
     container_name: tempo
@@ -633,28 +675,8 @@ services:
     labels:
       - "promtail_enabled=true"
 
-  loki:
-    <<: *resources-small
-    image: grafana/loki:3.3.2
-    container_name: loki
-    command: ["-config.file=/etc/loki/loki.yaml"]
-    volumes:
-      - ./config/loki/loki.yaml:/etc/loki/loki.yaml
-      - loki_data:/loki
-    ports:
-      - "3100:3100"
-    networks:
-      - mlops-lab-net
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3100/ready"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-    labels:
-      - "promtail_enabled=true"
-
   promtail:
+    profiles: [observability]
     <<: *resources-micro
     image: grafana/promtail:3.3.2
     container_name: promtail
@@ -672,6 +694,7 @@ services:
       - "promtail_enabled=true"
 
   otel-collector:
+    profiles: [observability]
     <<: *resources-micro
     image: otel/opentelemetry-collector:0.127.0
     container_name: otel-collector
@@ -690,6 +713,7 @@ services:
   # ---- SSO Infrastructure ----
 
   authelia:
+    profiles: [sso]
     <<: *resources-small
     image: authelia/authelia:4.39
     container_name: authelia
@@ -713,6 +737,7 @@ services:
       - "promtail_enabled=true"
 
   caddy:
+    profiles: [sso]
     <<: *resources-small
     image: caddy:2.11-alpine
     container_name: caddy
@@ -741,6 +766,7 @@ services:
       - "promtail_enabled=true"
 
   portainer-init:
+    profiles: [sso]
     <<: *resources-micro
     image: curlimages/curl:8.14.1
     container_name: portainer-init
@@ -758,6 +784,8 @@ services:
     networks:
       - mlops-lab-net
     restart: "no"
+
+  # ---- LLM ----
 
   llamacpp:
     profiles: [llm]
