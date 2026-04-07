@@ -106,7 +106,9 @@ def _apply_network_patch(network: str) -> None:
             }
             with open(yaml_path, "w") as f:
                 yaml.dump(data, f, default_flow_style=False)
-            logger.info(f"Patched compose file {yaml_path}: network={network}, init=true, mem_limit=2g")
+            logger.info(
+                f"Patched compose file {yaml_path}: network={network}, init=true, mem_limit=2g"
+            )
         except Exception as e:
             logger.warning(f"Network patch failed: {e}")
         return compose_cmd
@@ -222,6 +224,9 @@ def _build_local_session(
     )
     sagemaker_session = sagemaker.local.LocalSession(boto_session=boto_session)
     sagemaker_session.local_mode = True
+    # Use port 8099 for the local serving endpoint so it doesn't conflict
+    # with Caddy which already occupies host port 8080.
+    sagemaker_session.config = {"local": {"serving_port": 8099}}
     sagemaker_session._s3_client = boto_session.client(
         "s3", endpoint_url=s3_endpoint
     )
