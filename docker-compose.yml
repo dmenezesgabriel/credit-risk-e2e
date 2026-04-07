@@ -131,6 +131,8 @@ services:
   # ---- Development ----
 
   jupyter:
+    profiles:
+      - modeling
     <<: *resources-xlarge # needs headroom for data processing
     build:
       context: .
@@ -171,7 +173,9 @@ services:
   # ---- Storage ----
 
   localstack:
-    profiles: [model-registry, feature-store]
+    profiles:
+      - model-registry
+      - feature-store
     <<: *resources-medium # spikes on lambda/s3 ops but mostly idle
     image: localstack/localstack:4
     container_name: localstack
@@ -200,7 +204,9 @@ services:
       - "promtail_enabled=true"
 
   postgres-db:
-    profiles: [model-registry, airflow]
+    profiles:
+      - model-registry
+      - airflow
     <<: *resources-medium # already tuned via postgres flags, cap above that
     image: postgres:18-alpine3.22
     container_name: postgres-db
@@ -236,7 +242,8 @@ services:
       - "promtail_enabled=true"
 
   mlflow:
-    profiles: [model-registry]
+    profiles:
+      - model-registry
     <<: *resources-large # tracking server is mostly I/O bound
     build:
       context: .
@@ -278,7 +285,8 @@ services:
   # ---- Management ----
 
   portainer:
-    profiles: [management]
+    profiles:
+      - management
     <<: *resources-small # completely idle unless you're actively using the UI
     image: portainer/portainer-ce:2.39.0-alpine
     container_name: portainer
@@ -306,8 +314,31 @@ services:
     labels:
       - "promtail_enabled=true"
 
+  portainer-init:
+    profiles:
+      - management
+    <<: *resources-micro
+    image: curlimages/curl:8.14.1
+    container_name: portainer-init
+    depends_on:
+      portainer:
+        condition: service_healthy
+      authelia:
+        condition: service_healthy
+    volumes:
+      - ./scripts/setup_portainer_oauth.sh:/setup.sh:ro
+    entrypoint: ["sh", "/setup.sh"]
+    environment:
+      PORTAINER_EXTERNAL_URL: "https://127.0.0.1:9000"
+      AUTHELIA_EXTERNAL_URL: "https://127.0.0.1:9091"
+    networks:
+      - mlops-lab-net
+    restart: "no"
+
   homepage:
-    profiles: [management]
+    profiles:
+      - home
+      - management
     <<: *resources-small # static config renderer, ~30MB baseline
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
@@ -334,7 +365,8 @@ services:
       - "promtail_enabled=true"
 
   adminer:
-    profiles: [management]
+    profiles:
+      - management
     <<: *resources-small # pure PHP UI, barely uses anything
     image: adminer:5.4.1
     container_name: adminer
@@ -356,7 +388,8 @@ services:
   # ---- Orchestration ----
 
   airflow-init:
-    profiles: [airflow]
+    profiles:
+      - airflow
     <<: *resources-medium
     group_add:
       - "${DOCKER_GID:-0}"
@@ -385,7 +418,8 @@ services:
       - "promtail_enabled=true"
 
   airflow-webserver:
-    profiles: [airflow]
+    profiles:
+      - airflow
     <<: *resources-xxlarge # Airflow 3.x internal API server + execution API; OOMs at 1GB under load
     group_add:
       - "${DOCKER_GID:-0}"
@@ -431,7 +465,8 @@ services:
       - "promtail_enabled=true"
 
   airflow-scheduler:
-    profiles: [airflow]
+    profiles:
+      - airflow
     <<: *resources-xxlarge # @task.virtualenv pip installs sagemaker[local] (~500MB peak) + runs pipeline
     group_add:
       - "${DOCKER_GID:-0}"
@@ -467,7 +502,8 @@ services:
       - "promtail_enabled=true"
 
   marquez:
-    profiles: [lineage]
+    profiles:
+      - lineage
     <<: *default-logging
     mem_limit: 256m
     memswap_limit: 256m
@@ -513,7 +549,8 @@ services:
   # ---- Observability ----
 
   pushgateway:
-    profiles: [observability]
+    profiles:
+      - observability
     <<: *resources-small
     image: prom/pushgateway:v1.11.0
     container_name: pushgateway
@@ -531,7 +568,8 @@ services:
       - "promtail_enabled=true"
 
   prometheus:
-    profiles: [observability]
+    profiles:
+      - observability
     <<: *resources-small
     image: prom/prometheus:v3.10.0-busybox
     container_name: prometheus
@@ -555,7 +593,8 @@ services:
       - "promtail_enabled=true"
 
   grafana:
-    profiles: [observability]
+    profiles:
+      - observability
     <<: *default-logging
     mem_limit: 256m # needs extra for SQLite page cache — avoids I/O thrashing
     memswap_limit: 256m
@@ -606,7 +645,8 @@ services:
       - "promtail_enabled=true"
 
   loki:
-    profiles: [observability]
+    profiles:
+      - observability
     <<: *resources-small
     image: grafana/loki:3.3.2
     container_name: loki
@@ -628,7 +668,8 @@ services:
       - "promtail_enabled=true"
 
   cadvisor:
-    profiles: [observability]
+    profiles:
+      - observability
     <<: *resources-small
     image: gcr.io/cadvisor/cadvisor:v0.52.1
     container_name: cadvisor
@@ -654,7 +695,8 @@ services:
       - "promtail_enabled=true"
 
   tempo:
-    profiles: [observability]
+    profiles:
+      - observability
     <<: *resources-small
     image: grafana/tempo:2.7.2
     container_name: tempo
@@ -676,7 +718,8 @@ services:
       - "promtail_enabled=true"
 
   promtail:
-    profiles: [observability]
+    profiles:
+      - observability
     <<: *resources-micro
     image: grafana/promtail:3.3.2
     container_name: promtail
@@ -694,7 +737,8 @@ services:
       - "promtail_enabled=true"
 
   otel-collector:
-    profiles: [observability]
+    profiles:
+      - observability
     <<: *resources-micro
     image: otel/opentelemetry-collector:0.127.0
     container_name: otel-collector
@@ -713,7 +757,8 @@ services:
   # ---- SSO Infrastructure ----
 
   authelia:
-    profiles: [sso]
+    profiles:
+      - sso
     <<: *resources-small
     image: authelia/authelia:4.39
     container_name: authelia
@@ -737,7 +782,8 @@ services:
       - "promtail_enabled=true"
 
   caddy:
-    profiles: [sso]
+    profiles:
+      - sso
     <<: *resources-small
     image: caddy:2.11-alpine
     container_name: caddy
@@ -765,30 +811,11 @@ services:
     labels:
       - "promtail_enabled=true"
 
-  portainer-init:
-    profiles: [sso]
-    <<: *resources-micro
-    image: curlimages/curl:8.14.1
-    container_name: portainer-init
-    depends_on:
-      portainer:
-        condition: service_healthy
-      authelia:
-        condition: service_healthy
-    volumes:
-      - ./scripts/setup_portainer_oauth.sh:/setup.sh:ro
-    entrypoint: ["sh", "/setup.sh"]
-    environment:
-      PORTAINER_EXTERNAL_URL: "https://127.0.0.1:9000"
-      AUTHELIA_EXTERNAL_URL: "https://127.0.0.1:9091"
-    networks:
-      - mlops-lab-net
-    restart: "no"
-
   # ---- LLM ----
 
   llamacpp:
-    profiles: [llm]
+    profiles:
+      - llm
     <<: *resources-large
     image: ghcr.io/ggml-org/llama.cpp:server
     container_name: llamacpp

@@ -13,17 +13,8 @@ setup-hosts: ## Ensure *.app.localhost resolves to 127.0.0.1
 up: generate-oidc-key setup-hosts
 	$(COMPOSE) up -d
 
-up-llm: ## Start llamacpp LLM server
-	$(COMPOSE) --profile llm up -d llamacpp
-
-up-adminer: ## Start Adminer DB UI
-	$(COMPOSE) --profile tools up -d adminer
-
 up-airflow: generate-oidc-key setup-hosts ## Start full stack with Airflow
 	$(COMPOSE) --profile airflow up -d
-
-up-lineage: ## Start Marquez lineage service
-	$(COMPOSE) --profile lineage up -d
 
 down:
 	@echo "Syncing S3 data to volume before shutdown..."
