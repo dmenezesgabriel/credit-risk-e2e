@@ -64,6 +64,21 @@ OAUTH_PROVIDERS = [
 
 # --- Custom security manager: extract user info from Authelia OIDC token ---
 class AutheliaSecurityManager(FabAirflowSecurityManagerOverride):
+    def __init__(self, appbuilder):
+        super().__init__(appbuilder)
+        # Airflow 3 api-server runs on HTTP behind Caddy TLS termination.
+        # Without ProxyFix, Flask generates http:// redirect URIs which
+        # fail because Caddy only speaks HTTPS on the exposed ports.
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        appbuilder.app.wsgi_app = ProxyFix(
+            appbuilder.app.wsgi_app,
+            x_for=1,
+            x_proto=1,
+            x_host=1,
+            x_prefix=1,
+        )
+
     def get_oauth_user_info(
         self, provider: str, resp: Any
     ) -> dict[str, str | list[str]]:

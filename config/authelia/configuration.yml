@@ -4,6 +4,10 @@
 
 server:
   address: "tcp://0.0.0.0:9091"
+  timeouts:
+    read: "30s"
+    write: "30s"
+    idle: "120s"
 
 log:
   level: warn
@@ -100,4 +104,4 @@ identity_providers:
           - "authorization_code"
         response_types:
           - "code"
-        token_endpoint_auth_method: "client_secret_post"
+        token_endpoint_auth_method: "client_secret_basic"
