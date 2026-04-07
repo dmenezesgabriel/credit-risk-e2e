@@ -5,23 +5,50 @@ GID := $(shell id -g)
 DOCKER_GID := $(shell stat -c '%g' /var/run/docker.sock)
 DOCKER_ENV := UID=$(UID) GID=$(GID) DOCKER_GID=$(DOCKER_GID)
 COMPOSE := $(DOCKER_ENV) docker compose
-COMPOSE_ALL := $(COMPOSE) --profile llm --profile tools --profile airflow --profile lineage
+COMPOSE_ALL := $(COMPOSE) --profile "*"
+PROFILES_CORE := --profile modeling --profile model-registry
+PROFILES_ORCHESTRATION := --profile airflow
+PROFILES_MANAGEMENT := --profile management
+PROFILES_MANAGEMENT_EXTRAS := --profile management-extras
+PROFILES_OBSERVABILITY := --profile observability
+PROFILES_OBSERVABILITY_EXTRAS := --profile observability --extras
+PROFILES_SECURITY := --profile sso
+
+PROFILES_GIVE_ME_SOME_CREDIT := \
+	$(PROFILES_CORE) \
+	$(PROFILES_ORCHESTRATION) \
+	$(PROFILES_MANAGEMENT) \
+	$(PROFILES_MANAGEMENT_EXTRAS) \
+	$(PROFILES_OBSERVABILITY) \
+	$(PROFILES_OBSERVABILITY_EXTRAS) \
+	$(PROFILES_SECURITY)
+
+PROFILES_NYC_TAXI_TRIP := \
+	$(PROFILES_CORE) \
+	$(PROFILES_OBSERVABILITY) \
+	$(PROFILES_SECURITY)
 
 setup-hosts: ## Ensure *.app.localhost resolves to 127.0.0.1
 	@bash scripts/setup_hosts.sh
 
-up: generate-oidc-key setup-hosts
-	$(COMPOSE) up -d
+up-give-me-some-credit: generate-oidc-key setup-hosts
+	$(COMPOSE) up -d $(PROFILES_GIVE_ME_SOME_CREDIT)
 
-up-airflow: generate-oidc-key setup-hosts ## Start full stack with Airflow
-	$(COMPOSE) --profile airflow up -d
+up-nyc-taxi-trip: generate-oidc-key setup-hosts
+	LOCALSTACK_SERVICES=s3,dynamodb \
+	$(COMPOSE) up -d $(PROFILES_NYC_TAXI_TRIP)
 
 down:
 	@echo "Syncing S3 data to volume before shutdown..."
-	docker exec localstack mkdir -p /var/lib/localstack/s3_backups/data-lake
-	docker exec localstack mkdir -p /var/lib/localstack/s3_backups/mlflow-artifacts
-	docker exec localstack awslocal s3 sync s3://data-lake /var/lib/localstack/s3_backups/data-lake
-	docker exec localstack awslocal s3 sync s3://mlflow-artifacts /var/lib/localstack/s3_backups/mlflow-artifacts
+	@if docker ps -a --format '{{.Names}}' | grep -q '^localstack$$'; then \
+		echo "Localstack container found, syncing..."; \
+		docker exec localstack mkdir -p /var/lib/localstack/s3_backups/data-lake; \
+		docker exec localstack mkdir -p /var/lib/localstack/s3_backups/mlflow-artifacts; \
+		docker exec localstack awslocal s3 sync s3://data-lake /var/lib/localstack/s3_backups/data-lake; \
+		docker exec localstack awslocal s3 sync s3://mlflow-artifacts /var/lib/localstack/s3_backups/mlflow-artifacts; \
+	else \
+		echo "Localstack container not found, skipping sync."; \
+	fi
 	$(COMPOSE_ALL) down
 
 tear-down:
