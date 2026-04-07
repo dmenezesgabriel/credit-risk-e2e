@@ -288,7 +288,69 @@ services:
     labels:
       - "promtail_enabled=true"
 
+  pushgateway:
+    <<: *resources-small
+    image: prom/pushgateway:v1.11.0
+    container_name: pushgateway
+    expose:
+      - "9091"
+    networks:
+      - mlops-lab-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "promtail_enabled=true"
+
+  marquez:
+    profiles: [lineage]
+    <<: *default-logging
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.50
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.50"
+        reservations:
+          memory: 128M
+          cpus: "0.10"
+    image: marquezproject/marquez:0.50.0
+    container_name: marquez
+    expose:
+      - "5001"
+      - "5002"
+    environment:
+      MARQUEZ_CONFIG: /opt/marquez/marquez.yml
+    volumes:
+      - ./config/marquez/marquez.yml:/opt/marquez/marquez.yml
+    networks:
+      - mlops-lab-net
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:5001/api/v1/namespaces",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    labels:
+      - "promtail_enabled=true"
+
   airflow-init:
+    profiles: [airflow]
     <<: *resources-medium
     group_add:
       - "${DOCKER_GID:-0}"
@@ -317,6 +379,7 @@ services:
       - "promtail_enabled=true"
 
   airflow-webserver:
+    profiles: [airflow]
     <<: *resources-xxlarge # Airflow 3.x internal API server + execution API; OOMs at 1GB under load
     group_add:
       - "${DOCKER_GID:-0}"
@@ -362,6 +425,7 @@ services:
       - "promtail_enabled=true"
 
   airflow-scheduler:
+    profiles: [airflow]
     <<: *resources-xxlarge # @task.virtualenv pip installs sagemaker[local] (~500MB peak) + runs pipeline
     group_add:
       - "${DOCKER_GID:-0}"

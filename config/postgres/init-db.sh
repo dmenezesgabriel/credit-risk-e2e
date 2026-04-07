@@ -9,4 +9,8 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
 
     CREATE USER airflow WITH PASSWORD 'airflow';
     CREATE DATABASE airflow OWNER airflow;
+
+    CREATE USER marquez WITH PASSWORD 'marquez';
+    CREATE DATABASE marquez OWNER marquez;
+    GRANT ALL PRIVILEGES ON DATABASE marquez TO marquez;
 EOSQL

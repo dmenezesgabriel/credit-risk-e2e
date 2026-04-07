@@ -222,3 +222,5 @@ catboost_info/
 *.chat
 *.playwright-mcp
 *.pem
+
+.build/
