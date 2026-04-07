@@ -33,11 +33,11 @@ setup-hosts: ## Ensure *.app.localhost resolves to 127.0.0.1
 	@bash scripts/setup_hosts.sh
 
 up-give-me-some-credit: generate-oidc-key setup-hosts
-	$(COMPOSE) up -d $(PROFILES_GIVE_ME_SOME_CREDIT)
+	$(COMPOSE) $(PROFILES_GIVE_ME_SOME_CREDIT) up -d
 
 up-nyc-taxi-trip: generate-oidc-key setup-hosts
 	LOCALSTACK_SERVICES=s3,dynamodb \
-	$(COMPOSE) up -d $(PROFILES_NYC_TAXI_TRIP)
+	$(COMPOSE) $(PROFILES_NYC_TAXI_TRIP) up -d
 
 down:
 	@echo "Syncing S3 data to volume before shutdown..."
