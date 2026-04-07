@@ -45,7 +45,7 @@ from sagemaker.workflow.parameters import (
 from sagemaker.workflow.pipeline import Pipeline
 from sagemaker.workflow.properties import PropertyFile
 from sagemaker.workflow.steps import ProcessingStep, TrainingStep
-from sagemaker_session import make_sagemaker_session
+from sagemaker_session import make_sagemaker_session  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -376,7 +376,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--s3-bucket", default="data-lake")
     parser.add_argument("--mlflow-uri", default="http://mlflow:5000")
     parser.add_argument("--experiment-name", default="give_me_some_credit")
-    parser.add_argument("--n-trials", type=int, default=10)
+    parser.add_argument("--n-trials", type=int, default=5)
     parser.add_argument("--auc-threshold", type=float, default=0.85)
     parser.add_argument(
         "--training-image", default="credit-risk-training:latest"
@@ -431,6 +431,7 @@ def main(args: argparse.Namespace) -> None:
     )
     logger.info(f"Pipeline execution started: {exec_id}")
 
+    failed_steps = []
     try:
         steps = execution.list_steps()
         logger.info("Pipeline step summary:")
@@ -439,8 +440,23 @@ def main(args: argparse.Namespace) -> None:
             status = step.get("StepStatus", "?")
             fail = step.get("FailureReason", "")
             logger.info(f"  {name}: {status}{' - ' + fail if fail else ''}")
+            if status == "Failed":
+                failed_steps.append(f"{name}: {fail}")
     except Exception as e:
         logger.info(f"Could not retrieve step summary: {e}")
+
+    # Check execution-level status (local mode exposes .status)
+    exec_status = getattr(execution, "status", None)
+    if exec_status and exec_status.lower() == "failed":
+        raise RuntimeError(
+            f"Pipeline execution {exec_id} FAILED. "
+            f"Failed steps: {'; '.join(failed_steps) if failed_steps else 'unknown'}"
+        )
+
+    if failed_steps:
+        raise RuntimeError(
+            f"Pipeline had failed steps: {'; '.join(failed_steps)}"
+        )
 
     logger.info("Pipeline complete.")
 

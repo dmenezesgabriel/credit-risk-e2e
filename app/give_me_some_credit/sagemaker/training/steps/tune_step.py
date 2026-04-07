@@ -35,6 +35,7 @@ import numpy as np
 import optuna
 import pandas as pd
 from catboost import CatBoostClassifier
+import lightgbm
 from lightgbm import LGBMClassifier
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
@@ -132,7 +133,7 @@ def load_baseline_results(
 # ---------------------------------------------------------------------------
 def _catboost_param_space(trial) -> dict:
     return {
-        "iterations": trial.suggest_int("iterations", 200, 600),
+        "iterations": trial.suggest_int("iterations", 100, 300),
         "depth": trial.suggest_int("depth", 4, 8),
         "learning_rate": trial.suggest_float(
             "learning_rate", 0.01, 0.15, log=True
@@ -148,7 +149,7 @@ def _catboost_param_space(trial) -> dict:
 
 def _lightgbm_param_space(trial) -> dict:
     return {
-        "n_estimators": trial.suggest_int("n_estimators", 200, 600),
+        "n_estimators": trial.suggest_int("n_estimators", 100, 300),
         "max_depth": trial.suggest_int("max_depth", 3, 8),
         "learning_rate": trial.suggest_float(
             "learning_rate", 0.01, 0.15, log=True
@@ -164,7 +165,7 @@ def _lightgbm_param_space(trial) -> dict:
 
 def _xgboost_param_space(trial) -> dict:
     return {
-        "n_estimators": trial.suggest_int("n_estimators", 200, 600),
+        "n_estimators": trial.suggest_int("n_estimators", 100, 300),
         "max_depth": trial.suggest_int("max_depth", 3, 7),
         "learning_rate": trial.suggest_float(
             "learning_rate", 0.01, 0.15, log=True
@@ -204,7 +205,7 @@ def _build_model_constructors() -> dict:
             **params,
             scale_pos_weight=SCALE_POS_WEIGHT,
             eval_metric="auc",
-            early_stopping_rounds=30,
+            early_stopping_rounds=15,
             random_state=random_state,
             verbosity=0,
         ),
@@ -226,11 +227,24 @@ def _build_objective(
         params = param_space_fn(trial)
         model = constructor(params, random_state)
 
-        fit_kwargs = (
-            {"eval_set": [(X_val, y_val)], "verbose": False}
-            if model_name == "xgboost"
-            else {}
-        )
+        if model_name == "xgboost":
+            fit_kwargs = {"eval_set": [(X_val, y_val)], "verbose": False}
+        elif model_name == "catboost":
+            fit_kwargs = {
+                "eval_set": (X_val, y_val),
+                "early_stopping_rounds": 20,
+                "verbose": 0,
+            }
+        elif model_name == "lightgbm":
+            fit_kwargs = {
+                "eval_set": [(X_val, y_val)],
+                "callbacks": [
+                    lightgbm.early_stopping(20, verbose=False)
+                ],
+            }
+        else:
+            fit_kwargs = {}
+
         model.fit(X_train, y_train, **fit_kwargs)
 
         return roc_auc_score(y_val, model.predict_proba(X_val)[:, 1])
@@ -281,11 +295,24 @@ def refit_and_evaluate(
     constructor = _build_model_constructors()[model_name]
     model = constructor(best_params, random_state)
 
-    fit_kwargs = (
-        {"eval_set": [(X_val, y_val)], "verbose": False}
-        if model_name == "xgboost"
-        else {}
-    )
+    if model_name == "xgboost":
+        fit_kwargs = {"eval_set": [(X_val, y_val)], "verbose": False}
+    elif model_name == "catboost":
+        fit_kwargs = {
+            "eval_set": (X_val, y_val),
+            "early_stopping_rounds": 20,
+            "verbose": 0,
+        }
+    elif model_name == "lightgbm":
+        fit_kwargs = {
+            "eval_set": [(X_val, y_val)],
+            "callbacks": [
+                lightgbm.early_stopping(20, verbose=False)
+            ],
+        }
+    else:
+        fit_kwargs = {}
+
     model.fit(X_train, y_train, **fit_kwargs)
 
     y_prob = model.predict_proba(X_val)[:, 1]

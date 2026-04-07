@@ -18,7 +18,9 @@ In tests, create an isolated registry and register mock builders
 without touching the default registry.
 """
 
+import atexit
 import logging
+import subprocess
 from typing import TypeAlias
 
 import boto3
@@ -53,9 +55,17 @@ SupportedMode: TypeAlias = str
 
 def _apply_network_patch(network: str) -> None:
     """
-    Injects an external Docker network into SageMaker's generated
-    compose files so local containers can resolve service hostnames
-    (localstack, mlflow, etc.).
+    Injects an external Docker network and hardening tweaks into
+    SageMaker's generated compose files so local containers can resolve
+    service hostnames (localstack, mlflow, etc.) and behave well on
+    resource-constrained hosts.
+
+    Injected tweaks per service:
+      - ``networks: {<network>: {}}`` — Docker network connectivity
+      - ``init: true``               — tini as PID 1, prevents zombie processes
+      - ``mem_limit / memswap_limit`` — cap memory (default 2 GB)
+      - ``logging``                  — json-file rotation (10 MB / 2 files)
+      - ``labels``                   — ``sagemaker.local=true`` for easy cleanup
 
     Caveat: patches a private SageMaker SDK internal (_SageMakerContainer._compose).
     Pin sagemaker SDK version in requirements.txt and treat upgrades as
@@ -70,14 +80,33 @@ def _apply_network_patch(network: str) -> None:
             with open(yaml_path) as f:
                 data = yaml.safe_load(f)
             for svc in data.get("services", {}).values():
+                # Network: allow reaching mlops-lab services
                 svc.setdefault("networks", {})[network] = {}
+                # Init: tini as PID 1 — reaps zombie child processes
+                svc["init"] = True
+                # Memory: cap at 2 GB to prevent host OOM
+                svc.setdefault("mem_limit", "2g")
+                svc.setdefault("memswap_limit", "2g")
+                # Logging: prevent unbounded log growth
+                svc.setdefault("logging", {}).update(
+                    {
+                        "driver": "json-file",
+                        "options": {"max-size": "10m", "max-file": "2"},
+                    }
+                )
+                # Labels: identify SageMaker containers for cleanup
+                labels = svc.setdefault("labels", {})
+                if isinstance(labels, list):
+                    labels.append("sagemaker.local=true")
+                else:
+                    labels["sagemaker.local"] = "true"
             data.setdefault("networks", {})[network] = {
                 "external": True,
                 "name": network,
             }
             with open(yaml_path, "w") as f:
                 yaml.dump(data, f, default_flow_style=False)
-            logger.info(f"Injected network '{network}' into {yaml_path}")
+            logger.info(f"Patched compose file {yaml_path}: network={network}, init=true, mem_limit=2g")
         except Exception as e:
             logger.warning(f"Network patch failed: {e}")
         return compose_cmd
@@ -133,6 +162,46 @@ def _apply_serving_host_patch() -> None:
     sm_local_session.get_docker_host = _patched_get_docker_host
 
 
+def cleanup_sagemaker_containers() -> int:
+    """
+    Remove all stopped containers labelled ``sagemaker.local=true``.
+
+    Returns the number of containers removed.  Safe to call at any time —
+    only stopped (exited) containers are affected.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "container",
+                "ls",
+                "-a",
+                "--filter",
+                "label=sagemaker.local=true",
+                "--filter",
+                "status=exited",
+                "-q",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        ids = result.stdout.strip().split()
+        if not ids:
+            return 0
+        subprocess.run(
+            ["docker", "rm", "-f"] + ids,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        logger.info(f"Cleaned up {len(ids)} SageMaker container(s)")
+        return len(ids)
+    except Exception as e:
+        logger.warning(f"SageMaker container cleanup failed: {e}")
+        return 0
+
+
 def _build_local_session(
     **kwargs: Unpack[SessionBuilderKwargs],
 ) -> SessionPair:
@@ -163,6 +232,7 @@ def _build_local_session(
 
     _apply_network_patch(network)
     _apply_serving_host_patch()
+    atexit.register(cleanup_sagemaker_containers)
 
     logger.info(f"Local SageMaker session ready (bucket={s3_bucket})")
     return sagemaker_session, boto_session

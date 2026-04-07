@@ -30,6 +30,7 @@ import mlflow.sklearn
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier
+import lightgbm
 from lightgbm import LGBMClassifier
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
@@ -86,7 +87,7 @@ VAL_PATH = "/opt/ml/input/data/val"
 # ---------------------------------------------------------------------------
 TARGET = "serious_dlqin2yrs"
 SCALE_POS_WEIGHT = 13.9
-CV_SPLITS = 5
+CV_SPLITS = 3
 BASELINE_S3_KEY = "baseline/baseline_results.json"
 
 
@@ -146,7 +147,7 @@ def build_models(random_state: int) -> dict:
         ),
         "catboost": CatBoostClassifier(
             scale_pos_weight=SCALE_POS_WEIGHT,
-            iterations=300,
+            iterations=100,
             depth=6,
             learning_rate=0.05,
             random_seed=random_state,
@@ -176,6 +177,45 @@ def _fit_xgboost(
     return model, cv_auc_mean, cv_auc_std
 
 
+def _fit_catboost(
+    model,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    random_state: int,
+) -> tuple:
+    cv_auc_mean, cv_auc_std = compute_cv_score(
+        model, X_train, y_train, random_state
+    )
+    model.fit(
+        X_train, y_train,
+        eval_set=(X_val, y_val),
+        early_stopping_rounds=20,
+        verbose=0,
+    )
+    return model, cv_auc_mean, cv_auc_std
+
+
+def _fit_lightgbm(
+    model,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    random_state: int,
+) -> tuple:
+    cv_auc_mean, cv_auc_std = compute_cv_score(
+        model, X_train, y_train, random_state
+    )
+    model.fit(
+        X_train, y_train,
+        eval_set=[(X_val, y_val)],
+        callbacks=[lightgbm.early_stopping(20, verbose=False)],
+    )
+    return model, cv_auc_mean, cv_auc_std
+
+
 def _fit_default(
     model,
     X_train: np.ndarray,
@@ -194,6 +234,8 @@ def _fit_default(
 def _build_fit_dispatchers() -> dict:
     return {
         "xgboost": _fit_xgboost,
+        "catboost": _fit_catboost,
+        "lightgbm": _fit_lightgbm,
     }
 
 

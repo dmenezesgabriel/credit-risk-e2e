@@ -113,6 +113,20 @@ x-resources-xlarge: &resources-xlarge
         memory: 256M
         cpus: "0.25"
 
+x-resources-xxlarge: &resources-xxlarge
+  <<: *default-logging
+  mem_limit: 1536m
+  memswap_limit: 1536m
+  cpus: 2
+  deploy:
+    resources:
+      limits:
+        memory: 1536M
+        cpus: "2"
+      reservations:
+        memory: 384M
+        cpus: "0.25"
+
 services:
   jupyter:
     <<: *resources-xlarge # needs headroom for data processing
@@ -303,7 +317,7 @@ services:
       - "promtail_enabled=true"
 
   airflow-webserver:
-    <<: *resources-large
+    <<: *resources-xxlarge # Airflow 3.x internal API server + execution API; OOMs at 1GB under load
     group_add:
       - "${DOCKER_GID:-0}"
     build:
@@ -348,7 +362,7 @@ services:
       - "promtail_enabled=true"
 
   airflow-scheduler:
-    <<: *resources-large # scheduler needs burst room when triggering DAGs
+    <<: *resources-xxlarge # @task.virtualenv pip installs sagemaker[local] (~500MB peak) + runs pipeline
     group_add:
       - "${DOCKER_GID:-0}"
     build:
